@@ -80,6 +80,22 @@ export default function DepositDetailPage() {
         <Timeline events={timelineEvents} />
       </div>
 
+      {(deposit.status === 'REPORT_READY' || deposit.status === 'PAYOUT_PENDING' ||
+        deposit.status === 'PAYOUT_APPROVED' || deposit.status === 'PAYOUT_SENT' ||
+        deposit.status === 'PAYOUT_CONFIRMED') && (
+        <div className="bg-bg-secondary rounded-lg p-4 mb-4">
+          <h2 className="font-medium mb-3">Actions</h2>
+          <div className="space-y-2">
+            <Link href={`/reports/${deposit.deposit_id}`} className="block text-primary text-sm">
+              View Report &rarr;
+            </Link>
+            <Link href={`/payouts/${deposit.deposit_id}`} className="block text-primary text-sm">
+              View Payouts &rarr;
+            </Link>
+          </div>
+        </div>
+      )}
+
       {deposit.status_reason && (
         <div className="bg-bg-secondary rounded-lg p-4 mb-4">
           <h2 className="font-medium mb-2">Note</h2>

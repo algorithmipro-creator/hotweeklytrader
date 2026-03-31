@@ -11,6 +11,8 @@ import { DepositsModule } from './deposits/deposits.module';
 import { BlockchainModule } from './blockchain/blockchain.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { WorkerModule } from './worker/worker.module';
+import { ReportsModule } from './reports/reports.module';
+import { PayoutsModule } from './payouts/payouts.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import telegramConfig from './config/telegram.config';
@@ -36,6 +38,8 @@ import jwtConfig from './config/jwt.config';
     BlockchainModule,
     ReconciliationModule,
     WorkerModule,
+    ReportsModule,
+    PayoutsModule,
   ],
 })
 export class AppModule {}

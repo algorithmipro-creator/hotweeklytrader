@@ -55,4 +55,14 @@ export async function getPeriods() {
   return response.data;
 }
 
+export async function getReportByDeposit(depositId: string) {
+  const response = await api.get(`/reports/deposit/${depositId}`);
+  return response.data;
+}
+
+export async function getPayoutsByDeposit(depositId: string) {
+  const response = await api.get(`/payouts/deposit/${depositId}`);
+  return response.data;
+}
+
 export default api;
