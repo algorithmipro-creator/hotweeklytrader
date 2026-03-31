@@ -1,0 +1,410 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  USER
+  OPERATOR
+  ADMIN
+  SUPER_ADMIN
+  COMPLIANCE_REVIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum DepositStatus {
+  CREATED
+  AWAITING_TRANSFER
+  DETECTED
+  CONFIRMING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  REPORT_READY
+  PAYOUT_PENDING
+  PAYOUT_APPROVED
+  PAYOUT_SENT
+  PAYOUT_CONFIRMED
+  ON_HOLD
+  MANUAL_REVIEW
+  REJECTED
+  CANCELLED
+}
+
+enum InvestmentPeriodStatus {
+  DRAFT
+  ACTIVE
+  LOCKED
+  COMPLETED
+  ARCHIVED
+}
+
+enum ReportStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PUBLISHED
+  REVISED
+}
+
+enum PayoutStatus {
+  PREPARED
+  PENDING_APPROVAL
+  APPROVED
+  SENT
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+
+enum PayoutDestinationRule {
+  ORIGINAL_SENDER
+  VERIFIED_ADDRESS
+  MANUAL_REVIEW
+}
+
+enum NotificationType {
+  DEPOSIT_ROUTE_CREATED
+  TRANSFER_DETECTED
+  TRANSFER_CONFIRMED
+  DEPOSIT_ACTIVATED
+  MANUAL_REVIEW_STARTED
+  DEPOSIT_REJECTED
+  PERIOD_STARTED
+  PERIOD_NEARING_END
+  PERIOD_COMPLETED
+  REPORT_READY
+  PAYOUT_PREPARED
+  PAYOUT_APPROVED
+  PAYOUT_SENT
+  PAYOUT_CONFIRMED
+  PAYOUT_FAILED
+  UNSUPPORTED_TOKEN_RECEIVED
+  DEPOSIT_MISMATCH
+  ACCOUNT_FROZEN
+  SYSTEM_ISSUE
+}
+
+enum NotificationChannel {
+  TELEGRAM
+  EMAIL
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+enum SupportCaseStatus {
+  OPEN
+  IN_PROGRESS
+  ESCALATED
+  RESOLVED
+  CLOSED
+}
+
+enum SupportCasePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  RETRYING
+}
+
+enum JobType {
+  BLOCKCHAIN_WATCHER
+  DEPOSIT_CONFIRMATION
+  PERIOD_COMPLETION
+  REPORT_GENERATION
+  PAYOUT_PREPARATION
+  PAYOUT_BROADCAST
+  NOTIFICATION_DISPATCH
+  RECONCILIATION
+}
+
+// ==================== MODELS ====================
+
+model User {
+  user_id             String        @id @default(uuid())
+  telegram_id         BigInt        @unique
+  username            String?
+  display_name        String?
+  language            String        @default("en")
+  status              UserStatus    @default(ACTIVE)
+  legal_ack_version   String?
+  risk_ack_version    String?
+  created_at          DateTime      @default(now())
+  updated_at          DateTime      @updatedAt
+  last_login_at       DateTime?
+
+  wallets             Wallet[]
+  deposits            Deposit[]
+  notifications       Notification[]
+  support_cases       SupportCase[]
+  admin_actions       AdminAction[]
+  audit_events        AuditEvent[]  @relation("AuditActor")
+}
+
+model Wallet {
+  wallet_id                 String   @id @default(uuid())
+  user_id                   String
+  network                   String
+  source_address            String?
+  payout_address            String?
+  source_address_confidence Float?
+  payout_address_type       String?
+  verification_status       String   @default("unverified")
+  first_seen_at             DateTime @default(now())
+  last_used_at              DateTime?
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+
+  user                      User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([network, source_address])
+}
+
+model InvestmentPeriod {
+  investment_period_id   String                   @id @default(uuid())
+  title                  String
+  period_type            String
+  start_date             DateTime
+  end_date               DateTime
+  lock_date              DateTime?
+  status                 InvestmentPeriodStatus   @default(DRAFT)
+  accepted_networks      String[]
+  accepted_assets        String[]
+  minimum_amount_rules   Json?
+  maximum_amount_rules   Json?
+  rules_snapshot         Json?
+  created_by             String?
+  created_at             DateTime                 @default(now())
+  updated_at             DateTime                 @updatedAt
+
+  deposits               Deposit[]
+}
+
+model Deposit {
+  deposit_id                String        @id @default(uuid())
+  user_id                   String
+  investment_period_id      String
+  network                   String
+  asset_symbol              String
+  deposit_route             String        @unique
+  source_address            String?
+  tx_hash                   String?
+  requested_amount          Decimal?
+  confirmed_amount          Decimal?
+  confirmation_count        Int           @default(0)
+  min_required_confirmations Int          @default(1)
+  status                    DepositStatus  @default(CREATED)
+  status_reason             String?
+  route_expires_at          DateTime?
+  created_at                DateTime       @default(now())
+  detected_at               DateTime?
+  confirmed_at              DateTime?
+  activated_at              DateTime?
+  completed_at              DateTime?
+  cancelled_at              DateTime?
+
+  user                      User            @relation(fields: [user_id], references: [user_id])
+  investment_period         InvestmentPeriod @relation(fields: [investment_period_id], references: [investment_period_id])
+  report                    ProfitLossReport?
+  payouts                   Payout[]
+
+  @@index([user_id])
+  @@index([investment_period_id])
+  @@index([status])
+  @@index([network, status])
+  @@index([deposit_route])
+  @@index([tx_hash])
+}
+
+model ProfitLossReport {
+  report_id            String       @id @default(uuid())
+  deposit_id           String       @unique
+  gross_result         Decimal
+  fee_amount           Decimal      @default(0)
+  net_result           Decimal
+  payout_amount        Decimal
+  calculation_method   String?
+  report_file_url      String?
+  report_reference     String?
+  generated_at         DateTime     @default(now())
+  approved_at          DateTime?
+  published_at         DateTime?
+  generated_by         String?
+  approved_by          String?
+  status               ReportStatus @default(DRAFT)
+
+  deposit              Deposit      @relation(fields: [deposit_id], references: [deposit_id])
+}
+
+model Payout {
+  payout_id            String                @id @default(uuid())
+  deposit_id           String
+  payout_batch_id      String?
+  destination_address  String
+  destination_rule     PayoutDestinationRule @default(ORIGINAL_SENDER)
+  amount               Decimal
+  network              String
+  asset_symbol         String
+  tx_hash              String?
+  blockchain_status    String?
+  approval_required    Boolean               @default(true)
+  prepared_by          String?
+  approved_by          String?
+  sent_by              String?
+  status               PayoutStatus          @default(PREPARED)
+  failure_reason       String?
+  created_at           DateTime              @default(now())
+  approved_at          DateTime?
+  sent_at              DateTime?
+  confirmed_at         DateTime?
+
+  deposit              Deposit               @relation(fields: [deposit_id], references: [deposit_id])
+
+  @@index([deposit_id])
+  @@index([status])
+  @@index([payout_batch_id])
+}
+
+model AdminAction {
+  action_id            String   @id @default(uuid())
+  admin_id             String
+  action_type          String
+  entity_type          String
+  entity_id            String
+  reason               String?
+  before_state_hash    String?
+  after_state_hash     String?
+  created_at           DateTime @default(now())
+
+  admin                User     @relation(fields: [admin_id], references: [user_id])
+
+  @@index([admin_id])
+  @@index([entity_type, entity_id])
+}
+
+model TransactionLog {
+  transaction_log_id    String   @id @default(uuid())
+  direction             String
+  network               String
+  asset_symbol          String
+  tx_hash               String
+  from_address          String?
+  to_address            String
+  amount                Decimal
+  fee_amount            Decimal?
+  confirmations         Int      @default(0)
+  status                String   @default("pending")
+  raw_payload_reference String?
+  source_system         String?
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  @@index([tx_hash])
+  @@index([network, status])
+  @@index([to_address])
+}
+
+model Notification {
+  notification_id        String             @id @default(uuid())
+  user_id                String
+  type                   NotificationType
+  channel                NotificationChannel @default(TELEGRAM)
+  title                  String
+  body                   String
+  delivery_status        DeliveryStatus      @default(PENDING)
+  sent_at                DateTime?
+  read_at                DateTime?
+  related_entity_type    String?
+  related_entity_id      String?
+  created_at             DateTime            @default(now())
+
+  user                   User                @relation(fields: [user_id], references: [user_id])
+
+  @@index([user_id])
+  @@index([delivery_status])
+  @@index([type])
+}
+
+model SupportCase {
+  case_id              String              @id @default(uuid())
+  user_id              String
+  related_deposit_id   String?
+  category             String
+  priority             SupportCasePriority @default(MEDIUM)
+  status               SupportCaseStatus   @default(OPEN)
+  assigned_to          String?
+  opened_reason        String
+  resolution_summary   String?
+  created_at           DateTime            @default(now())
+  updated_at           DateTime            @updatedAt
+  resolved_at          DateTime?
+
+  user                 User                @relation(fields: [user_id], references: [user_id])
+
+  @@index([user_id])
+  @@index([status])
+  @@index([related_deposit_id])
+}
+
+model AuditEvent {
+  audit_event_id       String   @id @default(uuid())
+  actor_type           String   @default("user")
+  actor_id             String?
+  action               String
+  entity_type          String
+  entity_id            String?
+  event_time           DateTime @default(now())
+  reason               String?
+  before_snapshot_hash String?
+  after_snapshot_hash  String?
+  metadata_reference   String?
+
+  actor                User?    @relation("AuditActor", fields: [actor_id], references: [user_id])
+
+  @@index([actor_type, actor_id])
+  @@index([entity_type, entity_id])
+  @@index([action])
+  @@index([event_time])
+}
+
+model SystemJob {
+  job_id               String    @id @default(uuid())
+  job_type             JobType
+  entity_type          String?
+  entity_id            String?
+  status               JobStatus @default(QUEUED)
+  attempts             Int       @default(0)
+  last_error           String?
+  queued_at            DateTime  @default(now())
+  started_at           DateTime?
+  finished_at          DateTime?
+
+  @@index([status])
+  @@index([job_type])
+  @@index([queued_at])
+}

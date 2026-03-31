@@ -1,0 +1,31 @@
+{
+  "name": "telegram-investment-service",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:worker": "npm run dev --workspace=apps/worker",
+    "dev:miniapp": "npm run dev --workspace=apps/miniapp",
+    "dev:admin": "npm run dev --workspace=apps/admin",
+    "dev:bot": "npm run dev --workspace=apps/bot",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "docker:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
+    "db:migrate": "npm run db:migrate --workspace=apps/api",
+    "db:seed": "npm run db:seed --workspace=apps/api",
+    "db:studio": "npm run db:studio --workspace=apps/api"
+  },
+  "devDependencies": {
+    "@babel/types": "^7.29.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "effect": "^3.21.0"
+  }
+}
