@@ -6,7 +6,7 @@ import { DepositStateMachine } from './deposit-state-machine';
 import { randomUUID } from 'crypto';
 
 const DEPOSIT_ADDRESSES: Record<string, string> = {
-  BSC: 'BSC adress1',
+  BSC: '0x1fFFbcda5bB208CbAd95882a9e57FA9354533AaC',
   TON: 'TON adress1',
   TRON: 'TRON adress1',
 };
