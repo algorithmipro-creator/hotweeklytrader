@@ -9,7 +9,7 @@ RUN cd apps/api && npm install
 
 COPY apps/api/ ./apps/api/
 
-RUN cd apps/api && npx prisma generate && npm run build
+RUN cd apps/api && npx prisma generate && npx nest build
 
 FROM node:20-alpine
 
@@ -24,4 +24,4 @@ RUN apk add --no-cache openssl
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]
