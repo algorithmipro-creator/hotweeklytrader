@@ -1,5 +1,4 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BlockchainWatcher } from '../interfaces/watcher.interface';
 import { OnChainTransaction } from '../interfaces/network.interface';
@@ -7,6 +6,8 @@ import { DepositsService } from '../../deposits/deposits.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 
 const USDT_BSC_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
+const USDT_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+const RPC_URL = 'https://rpc.ankr.com/bsc';
 
 @Injectable()
 export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, OnModuleDestroy {
@@ -15,17 +16,13 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
   private intervalId: NodeJS.Timeout | null = null;
   private lastProcessedBlock = 0;
   private depositAddress = '';
-  private apiKey = '';
-  private readonly baseUrl = 'https://api.etherscan.io/v2/api?chainid=56';
 
   constructor(
     private prisma: PrismaService,
-    private configService: ConfigService,
     private depositsService: DepositsService,
     private notificationsService: NotificationsService,
   ) {
     this.depositAddress = process.env.BLOCKCHAIN_BSC_DEPOSIT_ADDRESS || '';
-    this.apiKey = process.env.BLOCKCHAIN_BSCSCAN_API_KEY || this.configService.get<string>('blockchain.bsc.scanApiKey') || '';
   }
 
   async onModuleInit() {
@@ -46,14 +43,13 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
 
   async start(): Promise<void> {
     if (this.running) return;
-
-    if (!this.apiKey) {
-      this.logger.warn('BSCSCAN_API_KEY not configured, watcher disabled');
+    if (!this.depositAddress) {
+      this.logger.warn('BLOCKCHAIN_BSC_DEPOSIT_ADDRESS not configured, watcher disabled');
       return;
     }
 
     this.running = true;
-    this.logger.log('Starting BSC watcher via BscScan API...');
+    this.logger.log('Starting BSC watcher via Ankr RPC...');
 
     try {
       this.lastProcessedBlock = await this.getLatestBlock();
@@ -80,9 +76,13 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
   }
 
   async getLatestBlock(): Promise<number> {
-    const url = `${this.baseUrl}?module=proxy&action=eth_blockNumber&apikey=${this.apiKey}`;
-    const response = await fetch(url);
-    const data = await response.json();
+    const res = await fetch(RPC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
     return parseInt(data.result, 16);
   }
 
@@ -91,7 +91,7 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
   }
 
   private async poll(): Promise<void> {
-    if (!this.apiKey || !this.depositAddress) return;
+    if (!this.depositAddress) return;
 
     try {
       const currentBlock = await this.getLatestBlock();
@@ -102,7 +102,7 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
         return;
       }
 
-      const fromBlock = this.lastProcessedBlock > 0 ? this.lastProcessedBlock + 1 : Math.max(0, currentBlock - 5);
+      const fromBlock = this.lastProcessedBlock > 0 ? this.lastProcessedBlock + 1 : Math.max(0, currentBlock - 10);
       const toBlock = currentBlock;
 
       const deposits = await this.prisma.deposit.findMany({
@@ -121,48 +121,66 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       const sourceAddresses = deposits.map((d) => d.source_address?.toLowerCase()).filter(Boolean);
       const toAddress = this.depositAddress.toLowerCase();
 
-      const url = `${this.baseUrl}?module=account&action=tokentx&contractaddress=${USDT_BSC_CONTRACT}&address=${this.depositAddress}&startblock=${fromBlock}&endblock=${toBlock}&sort=asc&apikey=${this.apiKey}`;
-      const response = await fetch(url);
-      const data = await response.json();
+      // Get USDT Transfer events to our deposit address
+      const res = await fetch(RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getLogs',
+          params: [{
+            address: USDT_BSC_CONTRACT,
+            fromBlock: '0x' + fromBlock.toString(16),
+            toBlock: '0x' + toBlock.toString(16),
+            topics: [
+              USDT_TRANSFER_TOPIC,
+              null, // any from
+              '0x000000000000000000000000' + toAddress.slice(2), // to = our address
+            ],
+          }],
+          id: 1,
+        }),
+      });
 
-      if (data.status !== '1' || !data.result) {
-        if (data.message === 'No transactions found') {
-          this.logger.debug(`No USDT transfers in blocks ${fromBlock}-${toBlock}`);
-        } else {
-          this.logger.warn(`BscScan API: ${data.message}`);
-        }
+      const data = await res.json();
+
+      if (data.error) {
+        this.logger.error(`eth_getLogs error: ${data.error.message}`);
         this.lastProcessedBlock = currentBlock;
         return;
       }
 
-      const transfers = data.result;
-      this.logger.log(`Found ${transfers.length} USDT transfer(s) in blocks ${fromBlock}-${toBlock}`);
+      const logs = data.result || [];
+      this.logger.debug(`Found ${logs.length} USDT transfer log(s) in blocks ${fromBlock}-${toBlock}`);
 
-      for (const tx of transfers) {
-        const from = (tx.from || '').toLowerCase();
-        const to = (tx.to || '').toLowerCase();
-        const amount = parseFloat(tx.value) / Math.pow(10, parseInt(tx.tokenDecimal || '18'));
-        const confirmations = parseInt(tx.confirmations || '0');
+      for (const log of logs) {
+        const from = '0x' + log.topics[1].slice(26).toLowerCase();
+        const amountHex = log.data;
+        const amount = parseInt(amountHex, 16) / 1e18;
+        const txHash = log.transactionHash;
+        const blockNumber = parseInt(log.blockNumber, 16);
 
-        if (to !== toAddress) continue;
         if (!sourceAddresses.includes(from)) {
           this.logger.debug(`Transfer from ${from} not matched to any deposit`);
           continue;
         }
 
+        // Get confirmations
+        const confirmations = currentBlock - blockNumber;
+
         this.logger.log(
-          `Matched USDT transfer: ${amount} USDT from ${from} (TX: ${tx.hash.slice(0, 10)}..., confirmations: ${confirmations})`,
+          `Matched USDT transfer: ${amount} USDT from ${from} (TX: ${txHash.slice(0, 10)}..., confirmations: ${confirmations})`,
         );
 
         await this.processDetectedTransfer({
-          txHash: tx.hash,
-          blockNumber: parseInt(tx.blockNumber),
-          fromAddress: tx.from,
-          toAddress: tx.to,
+          txHash,
+          blockNumber,
+          fromAddress: from,
+          toAddress: this.depositAddress,
           amount: amount.toString(),
           tokenSymbol: 'USDT',
           confirmations,
-          timestamp: new Date(parseInt(tx.timeStamp) * 1000),
+          timestamp: new Date(),
           network: 'BSC',
         });
       }
