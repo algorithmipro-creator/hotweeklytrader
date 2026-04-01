@@ -18,19 +18,19 @@ async function main() {
     });
   }
 
-  // Create sample investment period for testing
+  // Create active investment period "1 неделя"
   const now = new Date();
-  const startDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const startDate = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
+  const endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   await prisma.investmentPeriod.create({
     data: {
-      title: 'Test Period 2026-Q2',
+      title: '1 неделя',
       period_type: 'fixed',
       start_date: startDate,
       end_date: endDate,
       lock_date: startDate,
-      status: InvestmentPeriodStatus.DRAFT,
+      status: InvestmentPeriodStatus.ACTIVE,
       accepted_networks: ['BSC', 'TRON', 'TON'],
       accepted_assets: ['USDT', 'USDC'],
       minimum_amount_rules: { default: 100 },

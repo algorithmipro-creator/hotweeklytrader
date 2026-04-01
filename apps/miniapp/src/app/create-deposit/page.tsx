@@ -7,6 +7,14 @@ import { getPeriods, createDeposit } from '../../lib/api';
 
 const NETWORKS = ['BSC', 'TRON', 'TON', 'ETH', 'SOL'];
 
+const USDT_CONTRACTS: Record<string, string> = {
+  BSC: '0x55d398326f99059fF775485246999027B3197955',
+  TRON: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+  TON: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+  ETH: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+  SOL: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+};
+
 export default function CreateDepositPage() {
   const router = useRouter();
   const [periods, setPeriods] = useState<any[]>([]);
@@ -44,6 +52,8 @@ export default function CreateDepositPage() {
       setLoading(false);
     }
   };
+
+  const contractAddress = selectedAsset === 'USDT' && selectedNetwork ? USDT_CONTRACTS[selectedNetwork] : null;
 
   return (
     <div className="p-4">
@@ -98,13 +108,20 @@ export default function CreateDepositPage() {
             onChange={(e) => setSelectedAsset(e.target.value)}
             className="w-full p-3 bg-bg-secondary rounded-lg text-text"
             required
-            disabled={!currentPeriod}
+            disabled={!currentPeriod || availableAssets.length === 0}
           >
             <option value="">Select an asset...</option>
             {availableAssets.map((a: string) => (
               <option key={a} value={a}>{a}</option>
             ))}
           </select>
+
+          {contractAddress && (
+            <div className="mt-2 p-2 bg-bg-tertiary rounded-lg">
+              <div className="text-xs text-text-secondary mb-1">Contract Address:</div>
+              <div className="text-xs font-mono text-link break-all">{contractAddress}</div>
+            </div>
+          )}
         </div>
 
         <button

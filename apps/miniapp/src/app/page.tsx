@@ -1,22 +1,9 @@
 'use client';
 
 import { useAuth } from '../providers/auth-provider';
-import { getInitData } from '../lib/telegram';
-import { useState } from 'react';
 
 export default function HomePage() {
   const { user, loading, error } = useAuth();
-  const [copied, setCopied] = useState(false);
-
-  const copyAdminToken = () => {
-    const initData = getInitData();
-    if (initData) {
-      navigator.clipboard.writeText(initData).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 3000);
-      });
-    }
-  };
 
   if (loading) {
     return (
@@ -44,18 +31,6 @@ export default function HomePage() {
           </p>
         )}
       </header>
-
-      <div className="mb-4 p-3 bg-bg-secondary rounded-lg">
-        <button
-          onClick={copyAdminToken}
-          className="w-full text-sm text-center text-primary font-medium"
-        >
-          {copied ? '✅ Token copied!' : '📋 Copy Admin Login Token'}
-        </button>
-        <p className="text-text-secondary text-xs mt-1">
-          Paste this token at hotweeklytrader.duckdns.org/admin/login
-        </p>
-      </div>
 
       <nav className="space-y-3">
         <a href="/deposits" className="block p-4 bg-bg-secondary rounded-lg">
