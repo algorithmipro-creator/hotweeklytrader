@@ -16,7 +16,7 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
   private lastProcessedBlock = 0;
   private depositAddress = '';
   private apiKey = '';
-  private readonly baseUrl = 'https://api.bscscan.com/v2/api?chainid=56';
+  private readonly baseUrl = 'https://api.etherscan.io/v2/api?chainid=56';
 
   constructor(
     private prisma: PrismaService,
