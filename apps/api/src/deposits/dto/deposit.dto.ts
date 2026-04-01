@@ -29,6 +29,9 @@ export class CreateDepositDto {
   @IsString()
   asset_symbol: string;
 
+  @IsString()
+  source_address: string;
+
   @IsNumber()
   @IsOptional()
   requested_amount?: number;

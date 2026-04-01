@@ -69,6 +69,7 @@ export class DepositsService {
         investment_period_id: dto.investment_period_id,
         network: dto.network,
         asset_symbol: dto.asset_symbol,
+        source_address: dto.source_address.toLowerCase(),
         deposit_route: depositRoute,
         requested_amount: dto.requested_amount ? dto.requested_amount.toString() : null,
         route_expires_at: routeExpiresAt,

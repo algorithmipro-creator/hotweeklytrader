@@ -151,14 +151,33 @@ export class EvmWatcherService implements BlockchainWatcher, OnModuleInit, OnMod
 
       const toAddress = this.depositAddress.toLowerCase();
 
+      const deposits = await this.prisma.deposit.findMany({
+        where: {
+          network: this.network.name,
+          status: { in: ['AWAITING_TRANSFER', 'DETECTED', 'CONFIRMING'] },
+          source_address: { not: null },
+        },
+      });
+
+      if (deposits.length === 0) {
+        this.lastProcessedBlock = currentBlock;
+        return;
+      }
+
+      const sourceAddresses = deposits
+        .map((d) => d.source_address?.toLowerCase())
+        .filter(Boolean);
+
       const filter = this.usdtContract.filters.Transfer(null, this.depositAddress);
-      const events = await this.usdtContract.queryFilter(filter, fromBlock, currentBlock);
+      const events = await this.usdtContract.queryFilter(filter, fromBlock, toBlock);
 
       for (const event of events) {
         const args = (event as any).args;
         const to = (args?.to || '').toLowerCase();
+        const from = (args?.from || '').toLowerCase();
 
         if (to !== toAddress) continue;
+        if (!sourceAddresses.includes(from)) continue;
 
         const value = args?.value;
         if (!value) continue;
@@ -176,14 +195,14 @@ export class EvmWatcherService implements BlockchainWatcher, OnModuleInit, OnMod
         const confirmations = receipt?.confirmations || 0;
 
         this.logger.log(
-          `Detected USDT transfer: ${amount} USDT from ${args?.from} to ${args?.to} (TX: ${txHash.slice(0, 10)}...)`,
+          `Matched USDT transfer: ${amount} USDT from ${from} to ${toAddress} (TX: ${txHash.slice(0, 10)}...)`,
         );
 
         const tx: OnChainTransaction = {
           txHash,
           blockNumber,
-          fromAddress: args?.from,
-          toAddress: args?.to,
+          fromAddress: from,
+          toAddress: to,
           amount: amount.toString(),
           tokenSymbol: 'USDT',
           confirmations,

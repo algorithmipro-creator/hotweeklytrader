@@ -169,7 +169,7 @@ model Wallet {
   wallet_id                 String   @id @default(uuid())
   user_id                   String
   network                   String
-  source_address            String?
+  source_address            String
   payout_address            String?
   source_address_confidence Float?
   payout_address_type       String?
@@ -181,6 +181,7 @@ model Wallet {
 
   user                      User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
+  @@unique([network, source_address])
   @@index([user_id])
   @@index([network, source_address])
 }

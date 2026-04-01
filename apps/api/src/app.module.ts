@@ -15,6 +15,7 @@ import { ReportsModule } from './reports/reports.module';
 import { PayoutsModule } from './payouts/payouts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SupportModule } from './support/support.module';
+import { WalletsModule } from './wallets/wallets.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import telegramConfig from './config/telegram.config';
@@ -44,6 +45,7 @@ import jwtConfig from './config/jwt.config';
     PayoutsModule,
     NotificationsModule,
     SupportModule,
+    WalletsModule,
   ],
 })
 export class AppModule {}
