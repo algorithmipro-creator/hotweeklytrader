@@ -7,7 +7,7 @@ import { NotificationsService } from '../../notifications/notifications.service'
 
 const USDT_BSC_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
 const USDT_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
-const RPC_URL = 'https://bsc-dataseed2.binance.org';
+const RPC_URL = 'https://bsc.publicnode.com';
 
 @Injectable()
 export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, OnModuleDestroy {
