@@ -65,4 +65,24 @@ export async function getPayoutsByDeposit(depositId: string) {
   return response.data;
 }
 
+export async function getNotifications() {
+  const response = await api.get('/notifications');
+  return response.data;
+}
+
+export async function markNotificationRead(id: string) {
+  const response = await api.put(`/notifications/${id}/read`);
+  return response.data;
+}
+
+export async function getSupportCases() {
+  const response = await api.get('/support');
+  return response.data;
+}
+
+export async function createSupportCase(data: { category: string; opened_reason: string; related_deposit_id?: string; priority?: string }) {
+  const response = await api.post('/support', data);
+  return response.data;
+}
+
 export default api;

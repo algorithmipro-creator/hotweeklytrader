@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/periods', label: 'Periods', icon: '\uD83D\uDCC5' },
   { href: '/reports', label: 'Reports', icon: '\uD83D\uDCCB' },
   { href: '/payouts', label: 'Payouts', icon: '\uD83D\uDCB8' },
+  { href: '/support', label: 'Support', icon: '\uD83C\uDD98' },
   { href: '/audit', label: 'Audit Log', icon: '\uD83D\uDD0D' },
 ];
 

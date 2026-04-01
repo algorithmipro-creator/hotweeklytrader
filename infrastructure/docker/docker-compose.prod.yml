@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-invest}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-invest_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-invest}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - internal
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-invest}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-invest_db}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_NAME: ${TELEGRAM_BOT_NAME}
+      BLOCKCHAIN_BSC_RPC_URL: ${BLOCKCHAIN_BSC_RPC_URL:-https://bsc-dataseed.binance.org}
+      BLOCKCHAIN_BSC_CONFIRMATIONS: ${BLOCKCHAIN_BSC_CONFIRMATIONS:-12}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+      - web
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  miniapp:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/miniapp/Dockerfile
+    environment:
+      NODE_ENV: production
+      API_BASE_URL: http://api:3000/api/v1
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - internal
+      - web
+
+  admin:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/admin/Dockerfile
+    environment:
+      NODE_ENV: production
+      API_BASE_URL: http://api:3000/api/v1
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - internal
+      - web
+
+  bot:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/bot/Dockerfile
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_NAME: ${TELEGRAM_BOT_NAME}
+      API_BASE_URL: http://api:3000/api/v1
+      MINI_APP_URL: ${MINI_APP_URL}
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:1.25-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api
+      - miniapp
+      - admin
+    restart: unless-stopped
+    networks:
+      - web
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  internal:
+    driver: bridge
+  web:
+    driver: bridge
