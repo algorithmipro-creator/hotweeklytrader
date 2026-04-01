@@ -86,7 +86,9 @@ export class EvmWatcherService implements BlockchainWatcher, OnModuleInit, OnMod
 
     try {
       this.lastProcessedBlock = await this.getLatestBlock();
-    } catch {
+      this.logger.log(`Starting from block ${this.lastProcessedBlock} on ${this.network.name}`);
+    } catch (err: any) {
+      this.logger.error(`Failed to get latest block on ${this.network.name}: ${err.message}`);
       this.lastProcessedBlock = 0;
     }
 
