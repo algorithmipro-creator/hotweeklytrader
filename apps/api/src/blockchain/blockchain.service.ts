@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { EvmWatcherService } from './networks/evm-watcher.service';
+import { BscScanWatcherService } from './networks/bscscan-watcher.service';
 import { BlockchainWatcher } from './interfaces/watcher.interface';
 import { OnChainTransaction } from './interfaces/network.interface';
 import { DepositsService } from '../deposits/deposits.service';
@@ -12,11 +12,10 @@ export class BlockchainService {
 
   constructor(
     private prisma: PrismaService,
-    private evmWatcher: EvmWatcherService,
+    private bscScanWatcher: BscScanWatcherService,
     private depositsService: DepositsService,
   ) {
-    this.watchers.set('BSC', this.evmWatcher);
-    this.watchers.set('ETH', this.evmWatcher);
+    this.watchers.set('BSC', this.bscScanWatcher);
   }
 
   getWatcherForNetwork(network: string): BlockchainWatcher | undefined {
