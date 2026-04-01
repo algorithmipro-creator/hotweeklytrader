@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import { BlockchainService } from './blockchain.service';
-import { EvmWatcherService } from './networks/evm-watcher.service';
+import { BscScanWatcherService } from './networks/bscscan-watcher.service';
 import { DepositsModule } from '../deposits/deposits.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [DepositsModule, NotificationsModule],
-  providers: [BlockchainService, EvmWatcherService],
-  exports: [BlockchainService, EvmWatcherService],
+  providers: [BlockchainService, BscScanWatcherService],
+  exports: [BlockchainService, BscScanWatcherService],
 })
 export class BlockchainModule {}
