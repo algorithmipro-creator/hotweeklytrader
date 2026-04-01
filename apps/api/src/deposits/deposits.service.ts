@@ -1,12 +1,22 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDepositDto, DepositDto, DepositStatus } from './dto/deposit.dto';
 import { DepositStateMachine } from './deposit-state-machine';
 import { randomUUID } from 'crypto';
 
+const DEPOSIT_ADDRESSES: Record<string, string> = {
+  BSC: 'BSC adress1',
+  TON: 'TON adress1',
+  TRON: 'TRON adress1',
+};
+
 @Injectable()
 export class DepositsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private configService: ConfigService,
+  ) {}
 
   async findByUser(userId: string): Promise<DepositDto[]> {
     const deposits = await this.prisma.deposit.findMany({
@@ -123,6 +133,7 @@ export class DepositsService {
       network: deposit.network,
       asset_symbol: deposit.asset_symbol,
       deposit_route: deposit.deposit_route,
+      deposit_address: DEPOSIT_ADDRESSES[deposit.network] || '',
       source_address: deposit.source_address,
       tx_hash: deposit.tx_hash,
       requested_amount: deposit.requested_amount ? parseFloat(deposit.requested_amount.toString()) : null,

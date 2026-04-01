@@ -41,6 +41,7 @@ export class DepositDto {
   network: string;
   asset_symbol: string;
   deposit_route: string;
+  deposit_address: string;
   source_address: string | null;
   tx_hash: string | null;
   requested_amount: number | null;
