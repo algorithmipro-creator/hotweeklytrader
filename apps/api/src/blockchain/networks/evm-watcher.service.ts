@@ -34,15 +34,29 @@ export class EvmWatcherService implements BlockchainWatcher, OnModuleInit, OnMod
     this.network = {
       name: 'BSC',
       chainId: 56,
-      rpcUrl: this.configService.get<string>('blockchain.bsc.rpcUrl') || 'https://bsc-dataseed.binance.org',
+      rpcUrl: this.configService.get<string>('blockchain.bsc.rpcUrl') || 'https://bsc-dataseed1.binance.org',
       nativeCurrency: 'BNB',
       supportedTokens: ['USDT', 'USDC', 'BUSD'],
       confirmationsRequired: this.configService.get<number>('blockchain.bsc.confirmationsRequired') || 12,
-      pollingIntervalMs: 60000,
+      pollingIntervalMs: 30000,
       blockConfirmations: 12,
     };
 
     this.depositAddress = process.env.BLOCKCHAIN_BSC_DEPOSIT_ADDRESS || '';
+  }
+
+  private async queryWithRetry(fn: () => Promise<any>, retries = 3): Promise<any> {
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        if (error?.code === 'BAD_DATA' && i < retries - 1) {
+          await new Promise((r) => setTimeout(r, 5000 * (i + 1)));
+          continue;
+        }
+        throw error;
+      }
+    }
   }
 
   async onModuleInit() {
@@ -149,8 +163,8 @@ export class EvmWatcherService implements BlockchainWatcher, OnModuleInit, OnMod
         return;
       }
 
-      const fromBlock = this.lastProcessedBlock > 0 ? this.lastProcessedBlock + 1 : Math.max(0, currentBlock - 10);
-      const toBlock = Math.min(fromBlock + 10, currentBlock);
+      const fromBlock = this.lastProcessedBlock > 0 ? this.lastProcessedBlock + 1 : Math.max(0, currentBlock - 1);
+      const toBlock = currentBlock;
 
       if (!this.depositAddress) {
         this.logger.warn('No deposit address configured for BSC');
@@ -178,7 +192,17 @@ export class EvmWatcherService implements BlockchainWatcher, OnModuleInit, OnMod
         .filter(Boolean);
 
       const filter = this.usdtContract.filters.Transfer(null, this.depositAddress);
-      const events = await this.usdtContract.queryFilter(filter, fromBlock, toBlock);
+
+      let events: any[] = [];
+      try {
+        events = await this.queryWithRetry(() =>
+          this.usdtContract.queryFilter(filter, fromBlock, toBlock),
+        );
+      } catch (error: any) {
+        this.logger.error(`eth_getLogs failed on BSC: ${error.message}`);
+        this.lastProcessedBlock = currentBlock;
+        return;
+      }
 
       for (const event of events) {
         const args = (event as any).args;
