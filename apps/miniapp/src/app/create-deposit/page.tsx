@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { getPeriods, createDeposit } from '../../lib/api';
+import { getPeriods, createDeposit, getWallets } from '../../lib/api';
 
 const NETWORKS = ['BSC', 'TRON', 'TON', 'ETH', 'SOL'];
 
@@ -18,20 +18,23 @@ const USDT_CONTRACTS: Record<string, string> = {
 export default function CreateDepositPage() {
   const router = useRouter();
   const [periods, setPeriods] = useState<any[]>([]);
+  const [wallets, setWallets] = useState<any[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState('');
   const [selectedNetwork, setSelectedNetwork] = useState('');
   const [selectedAsset, setSelectedAsset] = useState('');
+  const [sourceAddress, setSourceAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getPeriods()
-      .then(setPeriods)
-      .catch(console.error);
+    getPeriods().then(setPeriods).catch(console.error);
+    getWallets().then(setWallets).catch(console.error);
   }, []);
 
   const currentPeriod = periods.find((p) => p.investment_period_id === selectedPeriod);
   const availableAssets = currentPeriod?.accepted_assets || [];
+
+  const networkWallets = wallets.filter((w) => w.network === selectedNetwork);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +46,7 @@ export default function CreateDepositPage() {
         investment_period_id: selectedPeriod,
         network: selectedNetwork,
         asset_symbol: selectedAsset,
+        source_address: sourceAddress,
       });
 
       router.push(`/deposits/${deposit.deposit_id}`);
@@ -90,7 +94,10 @@ export default function CreateDepositPage() {
           <label className="block text-sm text-text-secondary mb-1">Network</label>
           <select
             value={selectedNetwork}
-            onChange={(e) => setSelectedNetwork(e.target.value)}
+            onChange={(e) => {
+              setSelectedNetwork(e.target.value);
+              setSourceAddress('');
+            }}
             className="w-full p-3 bg-bg-secondary rounded-lg text-text"
             required
           >
@@ -100,6 +107,37 @@ export default function CreateDepositPage() {
             ))}
           </select>
         </div>
+
+        {selectedNetwork && (
+          <div>
+            <label className="block text-sm text-text-secondary mb-1">Your Wallet Address</label>
+            {networkWallets.length > 0 && (
+              <select
+                value={sourceAddress}
+                onChange={(e) => setSourceAddress(e.target.value)}
+                className="w-full p-3 bg-bg-secondary rounded-lg text-text mb-2"
+              >
+                <option value="">Select saved address...</option>
+                {networkWallets.map((w) => (
+                  <option key={w.wallet_id} value={w.source_address}>
+                    {w.source_address.slice(0, 10)}...{w.source_address.slice(-8)}
+                  </option>
+                ))}
+                <option value="__new__">+ Use new address</option>
+              </select>
+            )}
+            {(sourceAddress === '__new__' || networkWallets.length === 0) && (
+              <input
+                type="text"
+                value={sourceAddress === '__new__' ? '' : sourceAddress}
+                onChange={(e) => setSourceAddress(e.target.value)}
+                placeholder="Enter your wallet address..."
+                className="w-full p-3 bg-bg-secondary rounded-lg text-text text-sm"
+                required
+              />
+            )}
+          </div>
+        )}
 
         <div>
           <label className="block text-sm text-text-secondary mb-1">Asset</label>
@@ -126,7 +164,7 @@ export default function CreateDepositPage() {
 
         <button
           type="submit"
-          disabled={loading || !selectedPeriod || !selectedNetwork || !selectedAsset}
+          disabled={loading || !selectedPeriod || !selectedNetwork || !selectedAsset || !sourceAddress || sourceAddress === '__new__'}
           className="w-full p-3 bg-primary text-primary-text rounded-lg font-medium disabled:opacity-50"
         >
           {loading ? 'Creating...' : 'Create Deposit'}

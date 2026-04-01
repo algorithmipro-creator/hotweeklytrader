@@ -42,6 +42,7 @@ export async function createDeposit(data: {
   investment_period_id: string;
   network: string;
   asset_symbol: string;
+  source_address: string;
   requested_amount?: number;
 }) {
   const response = await api.post('/deposits', data);
@@ -80,6 +81,21 @@ export async function getSupportCases() {
 
 export async function createSupportCase(data: { category: string; opened_reason: string; related_deposit_id?: string; priority?: string }) {
   const response = await api.post('/support', data);
+  return response.data;
+}
+
+export async function getWallets() {
+  const response = await api.get('/wallets');
+  return response.data;
+}
+
+export async function bindWallet(data: { network: string; source_address: string }) {
+  const response = await api.post('/wallets', data);
+  return response.data;
+}
+
+export async function unbindWallet(walletId: string) {
+  const response = await api.delete(`/wallets/${walletId}`);
   return response.data;
 }
 

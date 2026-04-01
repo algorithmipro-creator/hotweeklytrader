@@ -43,6 +43,11 @@ export default function HomePage() {
           <div className="text-text-secondary text-sm">Create a new deposit</div>
         </a>
 
+        <a href="/addresses" className="block p-4 bg-bg-secondary rounded-lg">
+          <div className="font-medium">My Addresses</div>
+          <div className="text-text-secondary text-sm">Manage your wallet addresses</div>
+        </a>
+
         <a href="/notifications" className="block p-4 bg-bg-secondary rounded-lg">
           <div className="font-medium">Notifications</div>
           <div className="text-text-secondary text-sm">View your notifications</div>
