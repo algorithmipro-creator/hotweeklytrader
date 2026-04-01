@@ -136,11 +136,18 @@ export class EvmWatcherService implements BlockchainWatcher, OnModuleInit, OnMod
   }
 
   private async poll(): Promise<void> {
-    if (!this.provider || !this.usdtContract) return;
+    if (!this.provider || !this.usdtContract) {
+      this.logger.warn(`Poll skipped: provider=${!!this.provider}, contract=${!!this.usdtContract}`);
+      return;
+    }
 
     try {
       const currentBlock = await this.getLatestBlock();
-      if (currentBlock <= this.lastProcessedBlock) return;
+      this.logger.debug(`Poll: currentBlock=${currentBlock}, lastProcessed=${this.lastProcessedBlock}`);
+      if (currentBlock <= this.lastProcessedBlock) {
+        this.logger.debug(`Poll: no new blocks, skipping`);
+        return;
+      }
 
       const fromBlock = this.lastProcessedBlock > 0 ? this.lastProcessedBlock + 1 : Math.max(0, currentBlock - 10);
       const toBlock = Math.min(fromBlock + 10, currentBlock);
