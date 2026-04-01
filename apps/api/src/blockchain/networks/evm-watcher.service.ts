@@ -42,7 +42,7 @@ export class EvmWatcherService implements BlockchainWatcher, OnModuleInit, OnMod
       blockConfirmations: 12,
     };
 
-    this.depositAddress = this.configService.get<string>('blockchain.bsc.depositAddress') || '';
+    this.depositAddress = process.env.BLOCKCHAIN_BSC_DEPOSIT_ADDRESS || '';
   }
 
   async onModuleInit() {
