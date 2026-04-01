@@ -38,7 +38,7 @@ export class EvmWatcherService implements BlockchainWatcher, OnModuleInit, OnMod
       nativeCurrency: 'BNB',
       supportedTokens: ['USDT', 'USDC', 'BUSD'],
       confirmationsRequired: this.configService.get<number>('blockchain.bsc.confirmationsRequired') || 12,
-      pollingIntervalMs: 15000,
+      pollingIntervalMs: 60000,
       blockConfirmations: 12,
     };
 
@@ -140,7 +140,8 @@ export class EvmWatcherService implements BlockchainWatcher, OnModuleInit, OnMod
       const currentBlock = await this.getLatestBlock();
       if (currentBlock <= this.lastProcessedBlock) return;
 
-      const fromBlock = this.lastProcessedBlock > 0 ? this.lastProcessedBlock + 1 : currentBlock - 100;
+      const fromBlock = this.lastProcessedBlock > 0 ? this.lastProcessedBlock + 1 : Math.max(0, currentBlock - 10);
+      const toBlock = Math.min(fromBlock + 10, currentBlock);
 
       if (!this.depositAddress) {
         this.logger.warn('No deposit address configured for BSC');
