@@ -102,8 +102,8 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
         return;
       }
 
-      const fromBlock = this.lastProcessedBlock > 0 ? this.lastProcessedBlock + 1 : Math.max(0, currentBlock - 10);
-      const toBlock = currentBlock;
+      const fromBlock = this.lastProcessedBlock > 0 ? this.lastProcessedBlock + 1 : Math.max(0, currentBlock - 1);
+      const toBlock = fromBlock;
 
       const deposits = await this.prisma.deposit.findMany({
         where: {
