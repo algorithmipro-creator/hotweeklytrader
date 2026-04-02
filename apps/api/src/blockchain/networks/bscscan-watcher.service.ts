@@ -108,27 +108,9 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       });
 
       // If we have deposits, calculate the earliest block to scan
-      // Scan from earliest deposit creation time, not lastProcessedBlock
-      // Use up to 60000 blocks (Tatum allows max 10000 per request, we'll make multiple calls)
-      let scanFromBlock = currentBlock - 60000;
+      // Use 30000 blocks to cover ~7 hours of BSC blocks
+      let scanFromBlock = currentBlock - 30000;
       if (scanFromBlock < 0) scanFromBlock = 0;
-      
-      // Also consider deposit created_at - if deposit was created recently, we might need to scan from creation
-      if (deposits.length > 0) {
-        const earliestDepositTime = deposits.reduce((min, d) => {
-          const createdAt = new Date(d.created_at).getTime();
-          return createdAt < min ? createdAt : min;
-        }, Date.now());
-        
-        // Rough estimate: 3 seconds per block on BSC
-        const blocksSinceDeposit = Math.floor((Date.now() - earliestDepositTime) / 3000);
-        const depositStartBlock = currentBlock - blocksSinceDeposit;
-        
-        // Use the earlier of: deposit creation or default 60000 blocks
-        if (depositStartBlock > scanFromBlock) {
-          scanFromBlock = Math.max(depositStartBlock, currentBlock - 60000);
-        }
-      }
 
       // Get token transfers from Tatum API for each source address
       for (const deposit of deposits) {

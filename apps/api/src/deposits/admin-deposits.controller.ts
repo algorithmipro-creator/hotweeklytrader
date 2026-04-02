@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Put, Param, Query, Body, UseGuards,
+  Controller, Get, Put, Delete, Param, Query, Body, UseGuards,
 } from '@nestjs/common';
 import { DepositsService } from './deposits.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -53,5 +53,13 @@ export class AdminDepositsController {
     @Body() dto: TransitionDepositDto,
   ): Promise<DepositDto> {
     return this.depositsService.transition(id, dto.status, dto.reason);
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string): Promise<{ deleted: boolean }> {
+    await (this.depositsService as any).prisma.deposit.delete({
+      where: { deposit_id: id },
+    });
+    return { deleted: true };
   }
 }
