@@ -223,12 +223,20 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       const depositAddressLower = this.depositAddress.toLowerCase().slice(2);
       const targetTopic = '0x000000000000000000000000' + depositAddressLower;
       
-      this.logger.debug(`Deposit address: ${this.depositAddress}, lower: ${depositAddressLower}, target topic: ${targetTopic}`);
+      this.logger.debug(`Deposit address: ${this.depositAddress}`);
       this.logger.debug(`Looking for to topic: ${targetTopic}`);
       
+      // Debug: show if deposit address appears in ANY of the logs
+      const matchingLogs = logs.filter((log: any) => {
+        const toTopic = (log.topics?.[2] || '').toLowerCase();
+        return toTopic === targetTopic;
+      });
+      
+      this.logger.debug(`Total matching logs: ${matchingLogs.length}`);
+      
       // Debug: show first few to topics in logs
-      const uniqueToTopics = [...new Set(logs.slice(0, 10).map((log: any) => log.topics?.[2]?.toLowerCase()))];
-      this.logger.debug(`Sample to topics in logs: ${JSON.stringify(uniqueToTopics)}`);
+      const uniqueToTopics = [...new Set(logs.slice(0, 100).map((log: any) => log.topics?.[2]?.toLowerCase()))];
+      this.logger.debug(`Sample to topics in logs (100): ${JSON.stringify(uniqueToTopics)}`);
       
       const transfers = logs.filter((log: any) => {
         const toTopic = (log.topics?.[2] || '').toLowerCase();
