@@ -212,6 +212,13 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       // Filter only transfers FROM the user address to any address
       const addressLower = address.toLowerCase();
       const targetTopic = '0x000000000000000000000000' + addressLower.slice(2);
+      
+      this.logger.debug(`Looking for topic: ${targetTopic}`);
+      
+      // Debug: show first few from topics in logs
+      const uniqueFromTopics = [...new Set(logs.slice(0, 10).map((log: any) => log.topics?.[1]?.toLowerCase()))];
+      this.logger.debug(`Sample from topics in logs: ${JSON.stringify(uniqueFromTopics)}`);
+      
       const transfers = logs.filter((log: any) => {
         const fromTopic = (log.topics?.[1] || '').toLowerCase();
         if (fromTopic === targetTopic) {
