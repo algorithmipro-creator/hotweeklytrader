@@ -124,14 +124,10 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
         const blocksSinceDeposit = Math.floor((Date.now() - earliestDepositTime) / 3000);
         const depositStartBlock = currentBlock - blocksSinceDeposit;
         
-        this.logger.debug(`Earliest deposit created ${blocksSinceDeposit} blocks ago, block ${depositStartBlock}`);
-        
         if (depositStartBlock < scanFromBlock) {
           scanFromBlock = Math.max(depositStartBlock - 1000, 0); // Add buffer
         }
       }
-      
-      this.logger.debug(`Final scan range: ${scanFromBlock} to ${currentBlock} (${currentBlock - scanFromBlock} blocks)`);
       
       // Limit scan range to 10000 blocks max (Tatum limit)
       if (currentBlock - scanFromBlock > 10000) {
