@@ -231,6 +231,7 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       const depositAddressLower = this.depositAddress.toLowerCase().slice(2);
       const targetTopic = '0x000000000000000000000000' + depositAddressLower;
       
+      this.logger.debug(`Deposit address: ${this.depositAddress}, lower: ${depositAddressLower}, target topic: ${targetTopic}`);
       this.logger.debug(`Looking for to topic: ${targetTopic}`);
       
       // Debug: show first few to topics in logs
