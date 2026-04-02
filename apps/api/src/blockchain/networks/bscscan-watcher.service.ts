@@ -109,7 +109,9 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
 
       // If we have deposits, calculate the earliest block to scan
       // Scan from earliest deposit creation time, not lastProcessedBlock
-      let scanFromBlock = currentBlock - 10000; // Default to 10000 blocks
+      // Use up to 60000 blocks (Tatum allows max 10000 per request, we'll make multiple calls)
+      let scanFromBlock = currentBlock - 60000;
+      if (scanFromBlock < 0) scanFromBlock = 0;
       
       // Also consider deposit created_at - if deposit was created recently, we might need to scan from creation
       if (deposits.length > 0) {
@@ -122,9 +124,9 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
         const blocksSinceDeposit = Math.floor((Date.now() - earliestDepositTime) / 3000);
         const depositStartBlock = currentBlock - blocksSinceDeposit;
         
-        // Use the earlier of: deposit creation or default 10000 blocks
-        if (depositStartBlock < scanFromBlock) {
-          scanFromBlock = Math.max(depositStartBlock, currentBlock - 10000);
+        // Use the earlier of: deposit creation or default 60000 blocks
+        if (depositStartBlock > scanFromBlock) {
+          scanFromBlock = Math.max(depositStartBlock, currentBlock - 60000);
         }
       }
 
@@ -173,11 +175,17 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       return [];
     }
 
-    try {
-      const fromBlockHex = '0x' + fromBlock.toString(16);
-      const toBlockHex = '0x' + toBlock.toString(16);
+    const CHUNK_SIZE = 10000;
+    const allTransfers: any[] = [];
+    
+    // Scan in chunks of 10000 blocks (Tatum limit)
+    for (let chunkStart = fromBlock; chunkStart < toBlock; chunkStart += CHUNK_SIZE) {
+      const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, toBlock);
+      
+      const fromBlockHex = '0x' + chunkStart.toString(16);
+      const toBlockHex = '0x' + chunkEnd.toString(16);
 
-      this.logger.debug(`Scanning BSC blocks ${fromBlockHex} to ${toBlockHex} for address ${address}`);
+      this.logger.debug(`Scanning BSC blocks ${fromBlockHex} to ${toBlockHex}`);
 
       await new Promise((r) => setTimeout(r, 500));
 
@@ -206,58 +214,44 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       });
       
       if (!response.ok) {
-        throw new Error(`Tatum RPC error: ${response.status}`);
+        this.logger.error(`Tatum RPC error: ${response.status}`);
+        continue;
       }
       
       const data = await response.json();
       
       if (data.error) {
         this.logger.error(`Tatum JSON-RPC error: ${data.error.message} (code: ${data.error.code})`);
-        return [];
+        continue;
       }
       
       const logs = data.result || [];
       this.logger.debug(`Tatum returned ${logs.length} logs for blocks ${fromBlockHex}-${toBlockHex}`);
       
       // Filter transfers to our deposit address
-      const depositAddressLower = this.depositAddress.toLowerCase().slice(2);
+      const depositAddressLower = depositAddress.toLowerCase().slice(2);
       const targetTopic = '0x000000000000000000000000' + depositAddressLower;
       
-      this.logger.debug(`Deposit address: ${this.depositAddress}`);
-      this.logger.debug(`Looking for to topic: ${targetTopic}`);
-      
-      // Debug: show if deposit address appears in ANY of the logs
       const matchingLogs = logs.filter((log: any) => {
         const toTopic = (log.topics?.[2] || '').toLowerCase();
         return toTopic === targetTopic;
       });
       
-      this.logger.debug(`Total matching logs: ${matchingLogs.length}`);
+      if (matchingLogs.length > 0) {
+        this.logger.log(`Found ${matchingLogs.length} transfers to deposit address in blocks ${fromBlockHex}-${toBlockHex}`);
+      }
       
-      // Debug: show first few to topics in logs
-      const uniqueToTopics = [...new Set(logs.slice(0, 100).map((log: any) => log.topics?.[2]?.toLowerCase()))];
-      this.logger.debug(`Sample to topics in logs (100): ${JSON.stringify(uniqueToTopics)}`);
-      
-      const transfers = logs.filter((log: any) => {
-        const toTopic = (log.topics?.[2] || '').toLowerCase();
-        if (toTopic === targetTopic) {
-          this.logger.debug(`Matched transfer to deposit: TX=${log.transactionHash}, from=0x${log.topics?.[1]?.slice(26)}`);
-        }
-        return toTopic === targetTopic;
-      });
-
-      return transfers.map((log: any) => ({
-        hash: log.transactionHash,
-        blockNumber: log.blockNumber,
-        from: '0x' + log.topics[1].slice(26),
-        to: this.depositAddress,
-        value: log.data,
-        timeStamp: log.timeStamp || '0'
-      }));
-    } catch (error: any) {
-      this.logger.error(`Tatum RPC error: ${error.message}`);
-      return [];
+      allTransfers.push(...matchingLogs);
     }
+
+    return allTransfers.map((log: any) => ({
+      hash: log.transactionHash,
+      blockNumber: log.blockNumber,
+      from: '0x' + log.topics[1].slice(26),
+      to: depositAddress,
+      value: log.data,
+      timeStamp: log.timeStamp || '0'
+    }));
   }
 
   private async processDetectedTransfer(tx: OnChainTransaction): Promise<void> {
