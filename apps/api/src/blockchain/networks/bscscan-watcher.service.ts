@@ -167,6 +167,8 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       const fromBlockHex = '0x' + (this.lastProcessedBlock - 10000).toString(16);
       const toBlockHex = '0x' + this.lastProcessedBlock.toString(16);
 
+      this.logger.debug(`Scanning BSC blocks ${fromBlockHex} to ${toBlockHex} for address ${address}`);
+
       await new Promise((r) => setTimeout(r, 500));
 
       const postData = JSON.stringify({
@@ -200,7 +202,14 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       }
       
       const data = await response.json();
+      
+      if (data.error) {
+        this.logger.error(`Tatum JSON-RPC error: ${data.error.message} (code: ${data.error.code})`);
+        return [];
+      }
+      
       const logs = data.result || [];
+      this.logger.debug(`Tatum returned ${logs.length} logs for blocks ${fromBlockHex}-${toBlockHex}`);
       
       // Filter only transfers TO our deposit address
       const depositAddressLower = this.depositAddress.toLowerCase().slice(2);
