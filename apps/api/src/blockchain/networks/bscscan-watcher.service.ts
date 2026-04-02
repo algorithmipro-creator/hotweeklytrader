@@ -129,6 +129,11 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
         }
       }
       
+      // Limit scan range to 10000 blocks max (Tatum limit)
+      if (currentBlock - scanFromBlock > 10000) {
+        scanFromBlock = currentBlock - 10000;
+      }
+      
       if (scanFromBlock < 0) scanFromBlock = 0;
 
       const toAddress = this.depositAddress.toLowerCase();
