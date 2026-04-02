@@ -98,6 +98,7 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
     try {
       const currentBlock = await this.getLatestBlock();
 
+      // Get deposits that need scanning
       const deposits = await this.prisma.deposit.findMany({
         where: {
           network: 'BSC',
@@ -106,10 +107,29 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
         },
       });
 
-      if (deposits.length === 0) {
-        this.lastProcessedBlock = currentBlock;
-        return;
+      // If we have deposits, calculate the earliest block to scan
+      // We'll scan from min of (lastProcessedBlock - 10000) and earliest deposit creation
+      let scanFromBlock = this.lastProcessedBlock > 0 
+        ? Math.max(this.lastProcessedBlock - 10000, 0) 
+        : currentBlock - 10000;
+      
+      // Also consider deposit created_at - if deposit was created recently, we might need to scan from creation
+      if (deposits.length > 0) {
+        const earliestDepositTime = deposits.reduce((min, d) => {
+          const createdAt = new Date(d.created_at).getTime();
+          return createdAt < min ? createdAt : min;
+        }, Date.now());
+        
+        // Rough estimate: 3 seconds per block on BSC
+        const blocksSinceDeposit = Math.floor((Date.now() - earliestDepositTime) / 3000);
+        const depositStartBlock = currentBlock - blocksSinceDeposit;
+        
+        if (depositStartBlock < scanFromBlock) {
+          scanFromBlock = Math.max(depositStartBlock - 1000, 0); // Add buffer
+        }
       }
+      
+      if (scanFromBlock < 0) scanFromBlock = 0;
 
       const toAddress = this.depositAddress.toLowerCase();
 
@@ -118,7 +138,7 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
         const sourceAddress = deposit.source_address?.toLowerCase();
         if (!sourceAddress) continue;
 
-        const transfers = await this.getTokenTransfers(sourceAddress);
+        const transfers = await this.getTokenTransfers(sourceAddress, scanFromBlock, currentBlock);
         this.logger.debug(`Found ${transfers.length} token transfer(s) for ${sourceAddress}`);
 
         for (const transfer of transfers) {
@@ -157,15 +177,15 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
     }
   }
 
-  private async getTokenTransfers(address: string): Promise<any[]> {
+  private async getTokenTransfers(address: string, fromBlock: number, toBlock: number): Promise<any[]> {
     if (!TATUM_API_KEY) {
       this.logger.warn('TATUM_API_KEY not configured, cannot fetch token transfers');
       return [];
     }
 
     try {
-      const fromBlockHex = '0x' + (this.lastProcessedBlock - 10000).toString(16);
-      const toBlockHex = '0x' + this.lastProcessedBlock.toString(16);
+      const fromBlockHex = '0x' + fromBlock.toString(16);
+      const toBlockHex = '0x' + toBlock.toString(16);
 
       this.logger.debug(`Scanning BSC blocks ${fromBlockHex} to ${toBlockHex} for address ${address}`);
 
