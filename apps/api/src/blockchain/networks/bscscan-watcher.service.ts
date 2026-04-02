@@ -164,29 +164,56 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
     }
 
     try {
-      const url = `${TATUM_URL}/v3/blockchain/token/transaction/bsc-mainnet/${address}/${USDT_BSC_CONTRACT}`;
-      const response = await fetch(url, {
+      const postData = JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'eth_getLogs',
+        params: [{
+          fromBlock: '0x0',
+          toBlock: '0xfffffffffff',
+          address: USDT_BSC_CONTRACT,
+          topics: [
+            '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+            null,
+            '0x000000000000000000000000' + address.slice(2).toLowerCase()
+          ]
+        }],
+        id: 1
+      });
+
+      const response = await fetch(TATUM_URL + '/', {
         method: 'POST',
         headers: { 
           'x-api-key': TATUM_API_KEY,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Content-Length': String(Buffer.byteLength(postData))
         },
+        body: postData
       });
       
       if (!response.ok) {
-        if (response.status === 404) {
-          return []; // No transfers found
-        }
-        throw new Error(`Tatum API error: ${response.status}`);
+        throw new Error(`Tatum RPC error: ${response.status}`);
       }
       
       const data = await response.json();
-      return data || [];
+      const logs = data.result || [];
+      
+      // Filter only transfers TO our deposit address
+      const depositAddressLower = this.depositAddress.toLowerCase().slice(2);
+      const transfers = logs.filter((log: any) => {
+        const toTopic = log.topics?.[2] || '';
+        return toTopic.toLowerCase().includes(depositAddressLower);
+      });
+
+      return transfers.map((log: any) => ({
+        hash: log.transactionHash,
+        blockNumber: log.blockNumber,
+        from: '0x' + log.topics[1].slice(26),
+        to: this.depositAddress,
+        value: log.data,
+        timeStamp: log.timeStamp || '0'
+      }));
     } catch (error: any) {
-      if (error.message?.includes('404')) {
-        return []; // No transfers found
-      }
-      this.logger.error(`Tatum API error: ${error.message}`);
+      this.logger.error(`Tatum RPC error: ${error.message}`);
       return [];
     }
   }
