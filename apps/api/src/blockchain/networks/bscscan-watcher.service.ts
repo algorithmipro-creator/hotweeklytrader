@@ -164,12 +164,17 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
     }
 
     try {
+      const fromBlockHex = '0x' + (this.lastProcessedBlock - 10000).toString(16);
+      const toBlockHex = '0x' + this.lastProcessedBlock.toString(16);
+
+      await new Promise((r) => setTimeout(r, 500));
+
       const postData = JSON.stringify({
         jsonrpc: '2.0',
         method: 'eth_getLogs',
         params: [{
-          fromBlock: '0x0',
-          toBlock: '0xfffffffffff',
+          fromBlock: fromBlockHex,
+          toBlock: toBlockHex,
           address: USDT_BSC_CONTRACT,
           topics: [
             '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
