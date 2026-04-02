@@ -166,7 +166,7 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
     try {
       const url = `${TATUM_URL}/v3/blockchain/token/transaction/bsc-mainnet/${address}/${USDT_BSC_CONTRACT}`;
       const response = await fetch(url, {
-        method: 'GET',
+        method: 'POST',
         headers: { 
           'x-api-key': TATUM_API_KEY,
           'Content-Type': 'application/json'
