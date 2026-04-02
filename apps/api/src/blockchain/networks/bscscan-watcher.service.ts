@@ -108,10 +108,8 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       });
 
       // If we have deposits, calculate the earliest block to scan
-      // We'll scan from min of (lastProcessedBlock - 10000) and earliest deposit creation
-      let scanFromBlock = this.lastProcessedBlock > 0 
-        ? Math.max(this.lastProcessedBlock - 10000, 0) 
-        : currentBlock - 10000;
+      // Scan from earliest deposit creation time, not lastProcessedBlock
+      let scanFromBlock = currentBlock - 10000; // Default to 10000 blocks
       
       // Also consider deposit created_at - if deposit was created recently, we might need to scan from creation
       if (deposits.length > 0) {
@@ -124,17 +122,11 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
         const blocksSinceDeposit = Math.floor((Date.now() - earliestDepositTime) / 3000);
         const depositStartBlock = currentBlock - blocksSinceDeposit;
         
+        // Use the earlier of: deposit creation or default 10000 blocks
         if (depositStartBlock < scanFromBlock) {
-          scanFromBlock = Math.max(depositStartBlock - 1000, 0); // Add buffer
+          scanFromBlock = Math.max(depositStartBlock, currentBlock - 10000);
         }
       }
-      
-      // Limit scan range to 10000 blocks max (Tatum limit)
-      if (currentBlock - scanFromBlock > 10000) {
-        scanFromBlock = currentBlock - 10000;
-      }
-      
-      if (scanFromBlock < 0) scanFromBlock = 0;
 
       // Get token transfers from Tatum API for each source address
       for (const deposit of deposits) {
