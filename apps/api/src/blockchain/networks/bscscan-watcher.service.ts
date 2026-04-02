@@ -210,10 +210,10 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       this.logger.debug(`Tatum returned ${logs.length} logs for blocks ${fromBlockHex}-${toBlockHex}`);
       
       // Filter only transfers FROM the user address to any address
-      const addressLower = address.toLowerCase().slice(2);
+      const addressLower = address.toLowerCase();
       const transfers = logs.filter((log: any) => {
         const fromTopic = log.topics?.[1] || '';
-        return fromTopic.toLowerCase().endsWith(addressLower);
+        return fromTopic.toLowerCase() === '0x000000000000000000000000' + addressLower.slice(2);
       });
 
       return transfers.map((log: any) => ({
