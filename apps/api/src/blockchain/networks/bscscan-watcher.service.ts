@@ -179,9 +179,7 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
           toBlock: toBlockHex,
           address: USDT_BSC_CONTRACT,
           topics: [
-            '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
-            null,
-            '0x000000000000000000000000' + address.slice(2).toLowerCase()
+            '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
           ]
         }],
         id: 1
@@ -211,11 +209,11 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       const logs = data.result || [];
       this.logger.debug(`Tatum returned ${logs.length} logs for blocks ${fromBlockHex}-${toBlockHex}`);
       
-      // Filter only transfers TO our deposit address
-      const depositAddressLower = this.depositAddress.toLowerCase().slice(2);
+      // Filter only transfers FROM the user address to any address
+      const addressLower = address.toLowerCase().slice(2);
       const transfers = logs.filter((log: any) => {
-        const toTopic = log.topics?.[2] || '';
-        return toTopic.toLowerCase().includes(depositAddressLower);
+        const fromTopic = log.topics?.[1] || '';
+        return fromTopic.toLowerCase().endsWith(addressLower);
       });
 
       return transfers.map((log: any) => ({
