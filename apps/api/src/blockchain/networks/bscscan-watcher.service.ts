@@ -136,22 +136,15 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       
       if (scanFromBlock < 0) scanFromBlock = 0;
 
-      const toAddress = this.depositAddress.toLowerCase();
-
       // Get token transfers from Tatum API for each source address
       for (const deposit of deposits) {
         const sourceAddress = deposit.source_address?.toLowerCase();
         if (!sourceAddress) continue;
 
-        const transfers = await this.getTokenTransfers(sourceAddress, scanFromBlock, currentBlock);
-        this.logger.debug(`Found ${transfers.length} token transfer(s) for ${sourceAddress}`);
+        const transfers = await this.getTokenTransfers(sourceAddress, scanFromBlock, currentBlock, this.depositAddress);
+        this.logger.debug(`Found ${transfers.length} token transfer(s) from ${sourceAddress} to ${this.depositAddress}`);
 
         for (const transfer of transfers) {
-          // Check if transfer was to our deposit address
-          if (transfer.to?.toLowerCase() !== toAddress) {
-            continue;
-          }
-
           // Get confirmations
           const transferBlock = parseInt(transfer.blockNumber, 10);
           const confirmations = currentBlock - transferBlock;
@@ -182,7 +175,7 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
     }
   }
 
-  private async getTokenTransfers(address: string, fromBlock: number, toBlock: number): Promise<any[]> {
+  private async getTokenTransfers(address: string, fromBlock: number, toBlock: number, depositAddress: string): Promise<any[]> {
     if (!TATUM_API_KEY) {
       this.logger.warn('TATUM_API_KEY not configured, cannot fetch token transfers');
       return [];
@@ -234,22 +227,22 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       const logs = data.result || [];
       this.logger.debug(`Tatum returned ${logs.length} logs for blocks ${fromBlockHex}-${toBlockHex}`);
       
-      // Filter only transfers FROM the user address to any address
-      const addressLower = address.toLowerCase();
-      const targetTopic = '0x000000000000000000000000' + addressLower.slice(2);
+      // Filter transfers to our deposit address
+      const depositAddressLower = this.depositAddress.toLowerCase().slice(2);
+      const targetTopic = '0x000000000000000000000000' + depositAddressLower;
       
-      this.logger.debug(`Looking for topic: ${targetTopic}`);
+      this.logger.debug(`Looking for to topic: ${targetTopic}`);
       
-      // Debug: show first few from topics in logs
-      const uniqueFromTopics = [...new Set(logs.slice(0, 10).map((log: any) => log.topics?.[1]?.toLowerCase()))];
-      this.logger.debug(`Sample from topics in logs: ${JSON.stringify(uniqueFromTopics)}`);
+      // Debug: show first few to topics in logs
+      const uniqueToTopics = [...new Set(logs.slice(0, 10).map((log: any) => log.topics?.[2]?.toLowerCase()))];
+      this.logger.debug(`Sample to topics in logs: ${JSON.stringify(uniqueToTopics)}`);
       
       const transfers = logs.filter((log: any) => {
-        const fromTopic = (log.topics?.[1] || '').toLowerCase();
-        if (fromTopic === targetTopic) {
-          this.logger.debug(`Matched transfer from ${address}: TX=${log.transactionHash}, to=0x${log.topics?.[2]?.slice(26)}`);
+        const toTopic = (log.topics?.[2] || '').toLowerCase();
+        if (toTopic === targetTopic) {
+          this.logger.debug(`Matched transfer to deposit: TX=${log.transactionHash}, from=0x${log.topics?.[1]?.slice(26)}`);
         }
-        return fromTopic === targetTopic;
+        return toTopic === targetTopic;
       });
 
       return transfers.map((log: any) => ({
