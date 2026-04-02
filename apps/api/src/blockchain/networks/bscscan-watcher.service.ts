@@ -6,8 +6,9 @@ import { DepositsService } from '../../deposits/deposits.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 
 const USDT_BSC_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
-const USDT_TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
-const RPC_URL = 'https://go.getblock.io/a7b30a17417f4361b54deb9912a9b5bf';
+const TATUM_URL = 'https://bsc-mainnet.gateway.tatum.io';
+const TATUM_API_KEY = process.env.TATUM_API_KEY || '';
+const FALLBACK_RPC_URL = 'https://bsc-dataseed.binance.org';
 
 @Injectable()
 export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, OnModuleDestroy {
@@ -49,11 +50,12 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
     }
 
     this.running = true;
-    this.logger.log('Starting BSC watcher via Ankr RPC...');
+    this.logger.log('Starting BSC watcher via Tatum API...');
 
     try {
-      this.lastProcessedBlock = await this.getLatestBlock();
-      this.logger.log(`Starting from block ${this.lastProcessedBlock}`);
+      const latestBlock = await this.getLatestBlock();
+      this.lastProcessedBlock = latestBlock;
+      this.logger.log(`Starting BSC watcher with Tatum API, latest block: ${latestBlock}`);
     } catch (err: any) {
       this.logger.error(`Failed to get latest block: ${err.message}`);
       this.lastProcessedBlock = 0;
@@ -76,7 +78,7 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
   }
 
   async getLatestBlock(): Promise<number> {
-    const res = await fetch(RPC_URL, {
+    const res = await fetch(FALLBACK_RPC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 }),
@@ -95,15 +97,6 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
 
     try {
       const currentBlock = await this.getLatestBlock();
-      this.logger.debug(`Poll: currentBlock=${currentBlock}, lastProcessed=${this.lastProcessedBlock}`);
-
-      if (currentBlock <= this.lastProcessedBlock) {
-        this.logger.debug('No new blocks, skipping');
-        return;
-      }
-
-      const fromBlock = this.lastProcessedBlock > 0 ? this.lastProcessedBlock + 1 : Math.max(0, currentBlock - 1);
-      const toBlock = fromBlock;
 
       const deposits = await this.prisma.deposit.findMany({
         where: {
@@ -118,76 +111,83 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
         return;
       }
 
-      const sourceAddresses = deposits.map((d) => d.source_address?.toLowerCase()).filter(Boolean);
       const toAddress = this.depositAddress.toLowerCase();
 
-      // Get USDT Transfer events to our deposit address
-      const res = await fetch(RPC_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'eth_getLogs',
-          params: [{
-            address: USDT_BSC_CONTRACT,
-            fromBlock: '0x' + fromBlock.toString(16),
-            toBlock: '0x' + toBlock.toString(16),
-            topics: [
-              USDT_TRANSFER_TOPIC,
-              null, // any from
-              '0x000000000000000000000000' + toAddress.slice(2), // to = our address
-            ],
-          }],
-          id: 1,
-        }),
-      });
+      // Get token transfers from Tatum API for each source address
+      for (const deposit of deposits) {
+        const sourceAddress = deposit.source_address?.toLowerCase();
+        if (!sourceAddress) continue;
 
-      const data = await res.json();
+        const transfers = await this.getTokenTransfers(sourceAddress);
+        this.logger.debug(`Found ${transfers.length} token transfer(s) for ${sourceAddress}`);
 
-      if (data.error) {
-        this.logger.error(`eth_getLogs error: ${data.error.message}`);
-        this.lastProcessedBlock = currentBlock;
-        return;
-      }
+        for (const transfer of transfers) {
+          // Check if transfer was to our deposit address
+          if (transfer.to?.toLowerCase() !== toAddress) {
+            continue;
+          }
 
-      const logs = data.result || [];
-      this.logger.debug(`Found ${logs.length} USDT transfer log(s) in blocks ${fromBlock}-${toBlock}`);
+          // Get confirmations
+          const transferBlock = parseInt(transfer.blockNumber, 10);
+          const confirmations = currentBlock - transferBlock;
 
-      for (const log of logs) {
-        const from = '0x' + log.topics[1].slice(26).toLowerCase();
-        const amountHex = log.data;
-        const amount = parseInt(amountHex, 16) / 1e18;
-        const txHash = log.transactionHash;
-        const blockNumber = parseInt(log.blockNumber, 16);
+          const amount = parseFloat(transfer.value) / 1e18;
 
-        if (!sourceAddresses.includes(from)) {
-          this.logger.debug(`Transfer from ${from} not matched to any deposit`);
-          continue;
+          this.logger.log(
+            `Matched USDT transfer: ${amount} USDT from ${transfer.from} (TX: ${transfer.hash?.slice(0, 10)}..., confirmations: ${confirmations})`,
+          );
+
+          await this.processDetectedTransfer({
+            txHash: transfer.hash,
+            blockNumber: transferBlock,
+            fromAddress: transfer.from,
+            toAddress: this.depositAddress,
+            amount: amount.toString(),
+            tokenSymbol: 'USDT',
+            confirmations,
+            timestamp: new Date(parseInt(transfer.timeStamp) * 1000),
+            network: 'BSC',
+          });
         }
-
-        // Get confirmations
-        const confirmations = currentBlock - blockNumber;
-
-        this.logger.log(
-          `Matched USDT transfer: ${amount} USDT from ${from} (TX: ${txHash.slice(0, 10)}..., confirmations: ${confirmations})`,
-        );
-
-        await this.processDetectedTransfer({
-          txHash,
-          blockNumber,
-          fromAddress: from,
-          toAddress: this.depositAddress,
-          amount: amount.toString(),
-          tokenSymbol: 'USDT',
-          confirmations,
-          timestamp: new Date(),
-          network: 'BSC',
-        });
       }
 
       this.lastProcessedBlock = currentBlock;
     } catch (error: any) {
       this.logger.error(`Poll failed: ${error.message}`);
+    }
+  }
+
+  private async getTokenTransfers(address: string): Promise<any[]> {
+    if (!TATUM_API_KEY) {
+      this.logger.warn('TATUM_API_KEY not configured, cannot fetch token transfers');
+      return [];
+    }
+
+    try {
+      const url = `${TATUM_URL}/v3/blockchain/token/transaction/bsc-mainnet/${address}/${USDT_BSC_CONTRACT}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 
+          'x-api-key': TATUM_API_KEY,
+          'Content-Type': 'application/json'
+        },
+      });
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          return []; // No transfers found
+        }
+        throw new Error(`Tatum API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data || [];
+    } catch (error: any) {
+      if (error.message?.includes('404')) {
+        return []; // No transfers found
+      }
+      this.logger.error(`Tatum API error: ${error.message}`);
+      return [];
     }
   }
 
