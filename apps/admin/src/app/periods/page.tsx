@@ -32,7 +32,6 @@ export default function PeriodsPage() {
     end_date: '',
     accepted_networks: 'BSC,TRON,TON',
     accepted_assets: 'USDT,USDC',
-    status: 'FUNDING',
   });
 
   useEffect(() => {
@@ -120,17 +119,6 @@ export default function PeriodsPage() {
             placeholder="Assets (comma-separated)"
             className="w-full px-3 py-2 bg-bg-tertiary rounded-lg text-sm text-text"
           />
-          <select
-            value={formData.status}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-            className="w-full px-3 py-2 bg-bg-tertiary rounded-lg text-sm text-text"
-          >
-            {PERIOD_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {STATUS_LABELS[status]}
-              </option>
-            ))}
-          </select>
           <button type="submit" className="w-full px-4 py-2 bg-success text-white rounded-lg text-sm">
             Create Period
           </button>
