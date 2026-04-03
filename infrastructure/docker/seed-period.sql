@@ -1,2 +1,2 @@
 INSERT INTO "InvestmentPeriod" ("investment_period_id", title, period_type, start_date, end_date, lock_date, status, accepted_networks, accepted_assets, "minimum_amount_rules", "maximum_amount_rules", created_at, updated_at)
-VALUES (gen_random_uuid()::text, '1 неделя', 'fixed', NOW() - INTERVAL '1 day', NOW() + INTERVAL '6 days', NOW() - INTERVAL '1 day', 'ACTIVE', ARRAY['BSC','TRON','TON'], ARRAY['USDT','USDC'], '{"default": 100}', '{"default": 100000}', NOW(), NOW());
+VALUES (gen_random_uuid()::text, '1 неделя', 'fixed', NOW() - INTERVAL '1 day', NOW() + INTERVAL '6 days', NOW() - INTERVAL '1 day', 'FUNDING', ARRAY['BSC','TRON','TON'], ARRAY['USDT','USDC'], '{"default": 100}', '{"default": 100000}', NOW(), NOW());

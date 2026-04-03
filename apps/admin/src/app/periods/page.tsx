@@ -3,9 +3,15 @@
 import { useState, useEffect } from 'react';
 import { getAdminPeriods, createPeriod, updatePeriodStatus } from '../../lib/api';
 
-const PERIOD_STATUSES = ['FUNDING', 'TRADING_ACTIVE', 'REPORTING', 'PAYOUT_IN_PROGRESS', 'CLOSED'] as const;
+const NEXT_STATUS_BY_CURRENT: Record<string, string | null> = {
+  FUNDING: 'TRADING_ACTIVE',
+  TRADING_ACTIVE: 'REPORTING',
+  REPORTING: 'PAYOUT_IN_PROGRESS',
+  PAYOUT_IN_PROGRESS: 'CLOSED',
+  CLOSED: null,
+};
 
-const STATUS_LABELS: Record<(typeof PERIOD_STATUSES)[number], string> = {
+const STATUS_LABELS: Record<string, string> = {
   FUNDING: 'Funding',
   TRADING_ACTIVE: 'Trading active',
   REPORTING: 'Reporting',
@@ -13,7 +19,7 @@ const STATUS_LABELS: Record<(typeof PERIOD_STATUSES)[number], string> = {
   CLOSED: 'Closed',
 };
 
-const STATUS_BADGES: Record<(typeof PERIOD_STATUSES)[number], string> = {
+const STATUS_BADGES: Record<string, string> = {
   FUNDING: 'bg-success/20 text-success',
   TRADING_ACTIVE: 'bg-primary/20 text-primary',
   REPORTING: 'bg-warning/20 text-warning',
@@ -138,34 +144,48 @@ export default function PeriodsPage() {
             </tr>
           </thead>
           <tbody>
-            {periods.map((p) => (
-              <tr key={p.investment_period_id} className="border-t border-gray-700">
-                <td className="p-3 font-medium">{p.title}</td>
-                <td className="p-3 text-text-secondary">
-                  {new Date(p.start_date).toLocaleDateString()} — {new Date(p.end_date).toLocaleDateString()}
-                </td>
-                <td className="p-3 text-text-secondary">{p.accepted_networks.join(', ')}</td>
-                <td className="p-3 text-text-secondary">{p.accepted_assets.join(', ')}</td>
-                <td className="p-3">
-                  <span className={`px-2 py-0.5 rounded text-xs ${STATUS_BADGES[p.status as keyof typeof STATUS_BADGES] || 'bg-gray-500/20 text-gray-400'}`}>
-                    {p.status}
-                  </span>
-                </td>
-                <td className="p-3">
-                  <select
-                    value={p.status}
-                    onChange={(e) => handleStatusChange(p.investment_period_id, e.target.value)}
-                    className="bg-bg-tertiary text-text text-xs px-2 py-1 rounded"
-                  >
-                    {PERIOD_STATUSES.map((status) => (
-                      <option key={status} value={status}>
-                        {STATUS_LABELS[status]}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-              </tr>
-            ))}
+            {periods.map((p) => {
+              const nextStatus = NEXT_STATUS_BY_CURRENT[p.status] || null;
+              const currentLabel = STATUS_LABELS[p.status] || p.status;
+
+              return (
+                <tr key={p.investment_period_id} className="border-t border-gray-700">
+                  <td className="p-3 font-medium">{p.title}</td>
+                  <td className="p-3 text-text-secondary">
+                    {new Date(p.start_date).toLocaleDateString()} - {new Date(p.end_date).toLocaleDateString()}
+                  </td>
+                  <td className="p-3 text-text-secondary">{p.accepted_networks.join(', ')}</td>
+                  <td className="p-3 text-text-secondary">{p.accepted_assets.join(', ')}</td>
+                  <td className="p-3">
+                    <span className={`px-2 py-0.5 rounded text-xs ${STATUS_BADGES[p.status] || 'bg-gray-500/20 text-gray-400'}`}>
+                      {currentLabel}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    {nextStatus ? (
+                      <select
+                        value={nextStatus}
+                        onChange={(e) => handleStatusChange(p.investment_period_id, e.target.value)}
+                        className="bg-bg-tertiary text-text text-xs px-2 py-1 rounded"
+                      >
+                        <option value={p.status} disabled>
+                          {currentLabel}
+                        </option>
+                        <option value={nextStatus}>{STATUS_LABELS[nextStatus]}</option>
+                      </select>
+                    ) : (
+                      <select
+                        value={p.status}
+                        disabled
+                        className="bg-bg-tertiary text-text text-xs px-2 py-1 rounded opacity-60"
+                      >
+                        <option value={p.status}>{currentLabel}</option>
+                      </select>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
