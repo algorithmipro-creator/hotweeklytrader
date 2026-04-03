@@ -115,6 +115,16 @@ describe('PeriodsService', () => {
   });
 
   describe('updateStatus', () => {
+    it('returns existing period without writing when status is unchanged', async () => {
+      mockPrisma.investmentPeriod.findUnique.mockResolvedValue(basePeriod);
+
+      await expect(service.updateStatus('period-1', 'FUNDING')).resolves.toMatchObject({
+        status: 'FUNDING',
+      });
+
+      expect(mockPrisma.investmentPeriod.update).not.toHaveBeenCalled();
+    });
+
     it('allows only forward transitions', async () => {
       mockPrisma.investmentPeriod.findUnique.mockResolvedValue(basePeriod);
       mockPrisma.investmentPeriod.update.mockResolvedValue({

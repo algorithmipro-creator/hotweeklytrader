@@ -62,10 +62,10 @@ export default function PeriodsPage() {
     }
   };
 
-  const handleStatusChange = async (id: string, status: string) => {
+  const handleAdvance = async (id: string, nextStatus: string) => {
     try {
-      await updatePeriodStatus(id, status);
-      setPeriods((prev) => prev.map((p) => (p.investment_period_id === id ? { ...p, status } : p)));
+      await updatePeriodStatus(id, nextStatus);
+      setPeriods((prev) => prev.map((p) => (p.investment_period_id === id ? { ...p, status: nextStatus } : p)));
     } catch (err) {
       console.error('Failed to update period status:', err);
     }
@@ -140,7 +140,7 @@ export default function PeriodsPage() {
               <th className="text-left p-3">Networks</th>
               <th className="text-left p-3">Assets</th>
               <th className="text-left p-3">Status</th>
-              <th className="text-left p-3">Actions</th>
+              <th className="text-left p-3">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -163,24 +163,14 @@ export default function PeriodsPage() {
                   </td>
                   <td className="p-3">
                     {nextStatus ? (
-                      <select
-                        value={nextStatus}
-                        onChange={(e) => handleStatusChange(p.investment_period_id, e.target.value)}
-                        className="bg-bg-tertiary text-text text-xs px-2 py-1 rounded"
+                      <button
+                        onClick={() => handleAdvance(p.investment_period_id, nextStatus)}
+                        className="px-3 py-1 rounded bg-bg-tertiary text-text text-xs border border-gray-600 hover:border-primary"
                       >
-                        <option value={p.status} disabled>
-                          {currentLabel}
-                        </option>
-                        <option value={nextStatus}>{STATUS_LABELS[nextStatus]}</option>
-                      </select>
+                        Advance to {STATUS_LABELS[nextStatus]}
+                      </button>
                     ) : (
-                      <select
-                        value={p.status}
-                        disabled
-                        className="bg-bg-tertiary text-text text-xs px-2 py-1 rounded opacity-60"
-                      >
-                        <option value={p.status}>{currentLabel}</option>
-                      </select>
+                      <span className="text-xs text-text-secondary">No action</span>
                     )}
                   </td>
                 </tr>

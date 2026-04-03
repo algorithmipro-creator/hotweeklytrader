@@ -101,9 +101,11 @@ export class PeriodsService {
       throw new NotFoundException('Investment period not found');
     }
 
-    if (existing.status !== status) {
-      PeriodTransitionGuard.assertCanTransition(existing.status, status);
+    if (existing.status === status) {
+      return this.serialize(existing);
     }
+
+    PeriodTransitionGuard.assertCanTransition(existing.status, status);
 
     const period = await this.prisma.investmentPeriod.update({
       where: { investment_period_id: id },
