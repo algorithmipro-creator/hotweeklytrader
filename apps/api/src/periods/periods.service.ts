@@ -76,11 +76,13 @@ export class PeriodsService {
     if (dto.status && dto.status !== existing.status) {
       PeriodTransitionGuard.assertCanTransition(existing.status, dto.status);
       updateData.status = dto.status as unknown as InvestmentPeriodStatus;
-    } else if (dto.status) {
-      updateData.status = dto.status as unknown as InvestmentPeriodStatus;
     }
     if (dto.accepted_networks) updateData.accepted_networks = dto.accepted_networks;
     if (dto.accepted_assets) updateData.accepted_assets = dto.accepted_assets;
+
+    if (Object.keys(updateData).length === 0) {
+      return this.serialize(existing);
+    }
 
     const period = await this.prisma.investmentPeriod.update({
       where: { investment_period_id: id },

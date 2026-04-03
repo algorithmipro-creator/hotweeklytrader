@@ -103,22 +103,14 @@ describe('PeriodsService', () => {
   });
 
   describe('update', () => {
-    it('allows same-status updates without failing transition validation', async () => {
+    it('does not write when dto.status matches the current status', async () => {
       mockPrisma.investmentPeriod.findUnique.mockResolvedValue(basePeriod);
-      mockPrisma.investmentPeriod.update.mockResolvedValue(basePeriod);
 
-      await expect(
-        service.update('period-1', {
-          status: 'FUNDING',
-        } as any),
-      ).resolves.toMatchObject({
+      await expect(service.update('period-1', { status: 'FUNDING' } as any)).resolves.toMatchObject({
         status: 'FUNDING',
       });
 
-      expect(mockPrisma.investmentPeriod.update).toHaveBeenCalledWith({
-        where: { investment_period_id: 'period-1' },
-        data: { status: 'FUNDING' },
-      });
+      expect(mockPrisma.investmentPeriod.update).not.toHaveBeenCalled();
     });
   });
 

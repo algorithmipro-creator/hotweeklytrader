@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JobType, JobStatus } from '@prisma/client';
+import { PeriodCompletionJob } from './jobs/period-completion.job';
 
 @Injectable()
 export class WorkerService implements OnModuleInit, OnModuleDestroy {
@@ -8,7 +9,10 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
   private running = false;
   private intervalId: NodeJS.Timeout | null = null;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private periodCompletionJob: PeriodCompletionJob,
+  ) {}
 
   async onModuleInit() {
     this.start();
@@ -125,6 +129,7 @@ export class WorkerService implements OnModuleInit, OnModuleDestroy {
 
   private async handlePeriodCompletion(entityId: string): Promise<void> {
     this.logger.debug(`Processing period completion for ${entityId}`);
+    await this.periodCompletionJob.execute(entityId);
   }
 
   private async handleNotificationDispatch(entityId: string): Promise<void> {
