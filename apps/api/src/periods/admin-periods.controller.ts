@@ -4,7 +4,7 @@ import {
 import { PeriodsService } from './periods.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { CreatePeriodDto, UpdatePeriodDto, PeriodDto } from './dto/period.dto';
+import { CreatePeriodDto, UpdatePeriodDto, PeriodDto, PeriodStatus } from './dto/period.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('admin/periods')
@@ -41,7 +41,7 @@ export class AdminPeriodsController {
   @Put(':id/status')
   async updateStatus(
     @Param('id') id: string,
-    @Body('status') status: string,
+    @Body('status') status: PeriodStatus,
   ): Promise<PeriodDto> {
     return this.periodsService.updateStatus(id, status);
   }

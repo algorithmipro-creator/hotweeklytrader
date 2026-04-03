@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateDepositDto, DepositDto, DepositStatus } from './dto/deposit.dto';
 import { DepositStateMachine } from './deposit-state-machine';
 import { randomUUID } from 'crypto';
+import { InvestmentPeriodStatus } from '@prisma/client';
 
 const DEPOSIT_ADDRESSES: Record<string, string> = {
   BSC: '0x1fFFbcda5bB208CbAd95882a9e57FA9354533AaC',
@@ -48,7 +49,7 @@ export class DepositsService {
       throw new NotFoundException('Investment period not found');
     }
 
-    if (period.status !== 'ACTIVE' && period.status !== 'DRAFT') {
+    if (period.status !== InvestmentPeriodStatus.FUNDING) {
       throw new BadRequestException('Investment period is not accepting deposits');
     }
 

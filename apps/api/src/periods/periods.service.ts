@@ -2,13 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePeriodDto, UpdatePeriodDto } from './dto/period.dto';
 import { InvestmentPeriodStatus } from '@prisma/client';
+import { PeriodTransitionGuard } from './period-transition.guard';
 
 @Injectable()
 export class PeriodsService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(status?: string) {
-    const where = status ? { status: status as InvestmentPeriodStatus } : { status: InvestmentPeriodStatus.ACTIVE };
+    const where = status ? { status: status as InvestmentPeriodStatus } : { status: InvestmentPeriodStatus.TRADING_ACTIVE };
 
     const periods = await this.prisma.investmentPeriod.findMany({
       where,
@@ -40,6 +41,7 @@ export class PeriodsService {
         lock_date: dto.lock_date ? new Date(dto.lock_date) : null,
         accepted_networks: dto.accepted_networks,
         accepted_assets: dto.accepted_assets,
+        status: InvestmentPeriodStatus.FUNDING,
         minimum_amount_rules: dto.minimum_amount_rules
           ? JSON.parse(JSON.stringify(dto.minimum_amount_rules))
           : null,
@@ -67,7 +69,10 @@ export class PeriodsService {
     if (dto.start_date) updateData.start_date = new Date(dto.start_date);
     if (dto.end_date) updateData.end_date = new Date(dto.end_date);
     if (dto.lock_date) updateData.lock_date = new Date(dto.lock_date);
-    if (dto.status) updateData.status = dto.status as InvestmentPeriodStatus;
+    if (dto.status) {
+      PeriodTransitionGuard.assertCanTransition(existing.status, dto.status);
+      updateData.status = dto.status as unknown as InvestmentPeriodStatus;
+    }
     if (dto.accepted_networks) updateData.accepted_networks = dto.accepted_networks;
     if (dto.accepted_assets) updateData.accepted_assets = dto.accepted_assets;
 
@@ -80,6 +85,16 @@ export class PeriodsService {
   }
 
   async updateStatus(id: string, status: string) {
+    const existing = await this.prisma.investmentPeriod.findUnique({
+      where: { investment_period_id: id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Investment period not found');
+    }
+
+    PeriodTransitionGuard.assertCanTransition(existing.status, status);
+
     const period = await this.prisma.investmentPeriod.update({
       where: { investment_period_id: id },
       data: { status: status as InvestmentPeriodStatus },

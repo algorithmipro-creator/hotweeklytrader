@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsArray, IsObject, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsObject, IsDateString, IsEnum } from 'class-validator';
+
+export enum PeriodStatus {
+  FUNDING = 'FUNDING',
+  TRADING_ACTIVE = 'TRADING_ACTIVE',
+  REPORTING = 'REPORTING',
+  PAYOUT_IN_PROGRESS = 'PAYOUT_IN_PROGRESS',
+  CLOSED = 'CLOSED',
+}
 
 export class CreatePeriodDto {
   @IsString()
@@ -51,9 +59,9 @@ export class UpdatePeriodDto {
   @IsOptional()
   lock_date?: string;
 
-  @IsString()
+  @IsEnum(PeriodStatus)
   @IsOptional()
-  status?: string;
+  status?: PeriodStatus;
 
   @IsArray()
   @IsString({ each: true })
@@ -73,7 +81,7 @@ export class PeriodDto {
   start_date: string;
   end_date: string;
   lock_date: string | null;
-  status: string;
+  status: PeriodStatus;
   accepted_networks: string[];
   accepted_assets: string[];
   minimum_amount_rules: any;

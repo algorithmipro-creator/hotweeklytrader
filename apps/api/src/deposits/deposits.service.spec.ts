@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { DepositsService } from './deposits.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 
 describe('DepositsService', () => {
@@ -18,15 +19,20 @@ describe('DepositsService', () => {
     },
   };
 
+  const mockConfig = {
+    get: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
         DepositsService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: ConfigService, useValue: mockConfig },
       ],
     }).compile();
 
-    service = (module as any).get(DepositsService);
+    service = module.get(DepositsService);
     jest.clearAllMocks();
   });
 
@@ -51,6 +57,72 @@ describe('DepositsService', () => {
     it('should throw if deposit not found', async () => {
       mockPrisma.deposit.findUnique.mockResolvedValue(null);
       await expect(service.findOne('nonexistent', 'user-1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('create', () => {
+    it('rejects deposits for non-FUNDING periods', async () => {
+      mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
+        investment_period_id: 'period-1',
+        status: 'TRADING_ACTIVE',
+        accepted_networks: ['TON'],
+        accepted_assets: ['USDT'],
+      });
+
+      await expect(
+        service.create('user-1', {
+          investment_period_id: 'period-1',
+          network: 'TON',
+          asset_symbol: 'USDT',
+          source_address: 'UQBURPCkGRJDaQiYF_e9v1WGCEKx7lbcxg_-hNaa_tn5Aw2U',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('allows deposits during FUNDING periods', async () => {
+      mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
+        investment_period_id: 'period-1',
+        status: 'FUNDING',
+        accepted_networks: ['TON'],
+        accepted_assets: ['USDT'],
+      });
+      mockPrisma.deposit.create.mockResolvedValue({
+        deposit_id: 'deposit-1',
+        user_id: 'user-1',
+        investment_period_id: 'period-1',
+        network: 'TON',
+        asset_symbol: 'USDT',
+        deposit_route: 'dr_123',
+        source_address: 'UQBURPCkGRJDaQiYF_e9v1WGCEKx7lbcxg_-hNaa_tn5Aw2U',
+        tx_hash: null,
+        requested_amount: null,
+        confirmed_amount: null,
+        confirmation_count: 0,
+        status: 'AWAITING_TRANSFER',
+        status_reason: null,
+        route_expires_at: new Date('2026-04-04T00:00:00.000Z'),
+        created_at: new Date('2026-04-03T00:00:00.000Z'),
+        detected_at: null,
+        confirmed_at: null,
+        activated_at: null,
+        completed_at: null,
+        cancelled_at: null,
+      });
+
+      await service.create('user-1', {
+        investment_period_id: 'period-1',
+        network: 'TON',
+        asset_symbol: 'USDT',
+        source_address: 'UQBURPCkGRJDaQiYF_e9v1WGCEKx7lbcxg_-hNaa_tn5Aw2U',
+      });
+
+      expect(mockPrisma.deposit.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'AWAITING_TRANSFER',
+          }),
+        }),
+      );
     });
   });
 });

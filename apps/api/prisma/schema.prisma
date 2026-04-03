@@ -43,11 +43,11 @@ enum DepositStatus {
 }
 
 enum InvestmentPeriodStatus {
-  DRAFT
-  ACTIVE
-  LOCKED
-  COMPLETED
-  ARCHIVED
+  FUNDING
+  TRADING_ACTIVE
+  REPORTING
+  PAYOUT_IN_PROGRESS
+  CLOSED
 }
 
 enum ReportStatus {
@@ -193,7 +193,7 @@ model InvestmentPeriod {
   start_date             DateTime
   end_date               DateTime
   lock_date              DateTime?
-  status                 InvestmentPeriodStatus   @default(DRAFT)
+  status                 InvestmentPeriodStatus   @default(FUNDING)
   accepted_networks      String[]
   accepted_assets        String[]
   minimum_amount_rules   Json?
