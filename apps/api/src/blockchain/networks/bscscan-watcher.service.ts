@@ -9,11 +9,17 @@ const USDT_BSC_CONTRACT = '0x55d398326f99059fF775485246999027B3197955';
 const TATUM_URL = 'https://bsc-mainnet.gateway.tatum.io';
 const TATUM_API_KEY = process.env.TATUM_API_KEY || '';
 const FALLBACK_RPC_URL = 'https://bsc-dataseed.binance.org';
+const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+const TATUM_CHUNK_SIZE = 500;
+const POLL_INTERVAL_MS = 30000;
+const INITIAL_BACKFILL_BLOCKS = 1800;
+const TOKEN_DECIMALS = 18n;
 
 @Injectable()
 export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BscScanWatcherService.name);
   private running = false;
+  private pollInFlight = false;
   private intervalId: NodeJS.Timeout | null = null;
   private lastProcessedBlock = 0;
   private depositAddress = '';
@@ -54,8 +60,10 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
 
     try {
       const latestBlock = await this.getLatestBlock();
-      this.lastProcessedBlock = latestBlock;
-      this.logger.log(`Starting BSC watcher with Tatum API, latest block: ${latestBlock}`);
+      this.lastProcessedBlock = Math.max(latestBlock - INITIAL_BACKFILL_BLOCKS, 0);
+      this.logger.log(
+        `Starting BSC watcher with Tatum API, latest block: ${latestBlock}, initial scan from: ${this.lastProcessedBlock}`,
+      );
     } catch (err: any) {
       this.logger.error(`Failed to get latest block: ${err.message}`);
       this.lastProcessedBlock = 0;
@@ -65,7 +73,7 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       this.poll().catch((err) => {
         this.logger.error(`Poll error:`, err);
       });
-    }, 30000);
+    }, POLL_INTERVAL_MS);
   }
 
   async stop(): Promise<void> {
@@ -93,7 +101,8 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
   }
 
   private async poll(): Promise<void> {
-    if (!this.depositAddress) return;
+    if (!this.depositAddress || this.pollInFlight) return;
+    this.pollInFlight = true;
 
     try {
       const currentBlock = await this.getLatestBlock();
@@ -107,65 +116,84 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
         },
       });
 
-      // If we have deposits, calculate the earliest block to scan
-      // Use 30000 blocks to cover ~7 hours of BSC blocks
-      let scanFromBlock = currentBlock - 30000;
-      if (scanFromBlock < 0) scanFromBlock = 0;
+      if (deposits.length === 0) {
+        this.lastProcessedBlock = currentBlock;
+        return;
+      }
 
-      // Get token transfers from Tatum API for each source address
-      for (const deposit of deposits) {
-        const sourceAddress = deposit.source_address?.toLowerCase();
-        if (!sourceAddress) continue;
+      const trackedAddresses = new Set(
+        deposits
+          .map((deposit) => deposit.source_address?.toLowerCase())
+          .filter((address): address is string => Boolean(address)),
+      );
 
-        const transfers = await this.getTokenTransfers(sourceAddress, scanFromBlock, currentBlock, this.depositAddress);
-        this.logger.debug(`Found ${transfers.length} token transfer(s) from ${sourceAddress} to ${this.depositAddress}`);
+      if (trackedAddresses.size === 0) {
+        this.lastProcessedBlock = currentBlock;
+        return;
+      }
 
-        for (const transfer of transfers) {
-          // Get confirmations
-          const transferBlock = parseInt(transfer.blockNumber, 10);
-          const confirmations = currentBlock - transferBlock;
+      const scanFromBlock =
+        this.lastProcessedBlock > 0
+          ? Math.min(this.lastProcessedBlock + 1, currentBlock)
+          : Math.max(currentBlock - INITIAL_BACKFILL_BLOCKS, 0);
 
-          const amount = parseFloat(transfer.value) / 1e18;
+      if (scanFromBlock > currentBlock) {
+        this.lastProcessedBlock = currentBlock;
+        return;
+      }
 
-          this.logger.log(
-            `Matched USDT transfer: ${amount} USDT from ${transfer.from} (TX: ${transfer.hash?.slice(0, 10)}..., confirmations: ${confirmations})`,
-          );
+      const transfers = await this.getTokenTransfers(scanFromBlock, currentBlock, this.depositAddress);
+      this.logger.debug(
+        `Found ${transfers.length} token transfer(s) to ${this.depositAddress} between blocks ${scanFromBlock} and ${currentBlock}`,
+      );
 
-          await this.processDetectedTransfer({
-            txHash: transfer.hash,
-            blockNumber: transferBlock,
-            fromAddress: transfer.from,
-            toAddress: this.depositAddress,
-            amount: amount.toString(),
-            tokenSymbol: 'USDT',
-            confirmations,
-            timestamp: new Date(parseInt(transfer.timeStamp) * 1000),
-            network: 'BSC',
-          });
-        }
+      for (const transfer of transfers) {
+        const sourceAddress = transfer.from.toLowerCase();
+        if (!trackedAddresses.has(sourceAddress)) continue;
+
+        const transferBlock = parseInt(transfer.blockNumber, 10);
+        const confirmations = currentBlock - transferBlock;
+        const amount = this.formatTokenAmount(transfer.value, TOKEN_DECIMALS);
+
+        this.logger.log(
+          `Matched USDT transfer: ${amount} USDT from ${transfer.from} (TX: ${transfer.hash?.slice(0, 10)}..., confirmations: ${confirmations})`,
+        );
+
+        await this.processDetectedTransfer({
+          txHash: transfer.hash,
+          blockNumber: transferBlock,
+          fromAddress: transfer.from,
+          toAddress: this.depositAddress,
+          amount,
+          tokenSymbol: 'USDT',
+          confirmations,
+          timestamp: new Date(),
+          network: 'BSC',
+          rawPayload: JSON.stringify(transfer),
+        });
       }
 
       this.lastProcessedBlock = currentBlock;
     } catch (error: any) {
       this.logger.error(`Poll failed: ${error.message}`);
+    } finally {
+      this.pollInFlight = false;
     }
   }
 
-  private async getTokenTransfers(address: string, fromBlock: number, toBlock: number, depositAddress: string): Promise<any[]> {
+  private async getTokenTransfers(fromBlock: number, toBlock: number, depositAddress: string): Promise<any[]> {
     if (!TATUM_API_KEY) {
       this.logger.warn('TATUM_API_KEY not configured, cannot fetch token transfers');
       return [];
     }
 
-    const CHUNK_SIZE = 10000;
     const allTransfers: any[] = [];
-    
-    // Scan in chunks of 10000 blocks (Tatum limit)
-    for (let chunkStart = fromBlock; chunkStart < toBlock; chunkStart += CHUNK_SIZE) {
-      const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, toBlock);
-      
+
+    for (let chunkStart = fromBlock; chunkStart <= toBlock; chunkStart += TATUM_CHUNK_SIZE) {
+      const chunkEnd = Math.min(chunkStart + TATUM_CHUNK_SIZE - 1, toBlock);
       const fromBlockHex = '0x' + chunkStart.toString(16);
       const toBlockHex = '0x' + chunkEnd.toString(16);
+      const targetTopic = this.getDepositTopic(depositAddress);
 
       this.logger.debug(`Scanning BSC blocks ${fromBlockHex} to ${toBlockHex}`);
 
@@ -179,7 +207,9 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
           toBlock: toBlockHex,
           address: USDT_BSC_CONTRACT,
           topics: [
-            '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+            TRANSFER_TOPIC,
+            null,
+            targetTopic,
           ]
         }],
         id: 1
@@ -209,31 +239,40 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
       
       const logs = data.result || [];
       this.logger.debug(`Tatum returned ${logs.length} logs for blocks ${fromBlockHex}-${toBlockHex}`);
-      
-      // Filter transfers to our deposit address
-      const depositAddressLower = depositAddress.toLowerCase().slice(2);
-      const targetTopic = '0x000000000000000000000000' + depositAddressLower;
-      
-      const matchingLogs = logs.filter((log: any) => {
-        const toTopic = (log.topics?.[2] || '').toLowerCase();
-        return toTopic === targetTopic;
-      });
-      
-      if (matchingLogs.length > 0) {
-        this.logger.log(`Found ${matchingLogs.length} transfers to deposit address in blocks ${fromBlockHex}-${toBlockHex}`);
+
+      if (logs.length > 0) {
+        this.logger.log(`Found ${logs.length} transfers to deposit address in blocks ${fromBlockHex}-${toBlockHex}`);
       }
-      
-      allTransfers.push(...matchingLogs);
+
+      allTransfers.push(...logs);
     }
 
     return allTransfers.map((log: any) => ({
       hash: log.transactionHash,
-      blockNumber: log.blockNumber,
+      blockNumber: parseInt(log.blockNumber, 16).toString(),
       from: '0x' + log.topics[1].slice(26),
       to: depositAddress,
       value: log.data,
-      timeStamp: log.timeStamp || '0'
+      timeStamp: '0',
     }));
+  }
+
+  private getDepositTopic(depositAddress: string): string {
+    return `0x000000000000000000000000${depositAddress.toLowerCase().replace(/^0x/, '')}`;
+  }
+
+  private formatTokenAmount(value: string, decimals: bigint): string {
+    const rawValue = BigInt(value);
+    const base = 10n ** decimals;
+    const whole = rawValue / base;
+    const fraction = rawValue % base;
+
+    if (fraction === 0n) {
+      return whole.toString();
+    }
+
+    const fractionText = fraction.toString().padStart(Number(decimals), '0').replace(/0+$/, '');
+    return `${whole.toString()}.${fractionText}`;
   }
 
   private async processDetectedTransfer(tx: OnChainTransaction): Promise<void> {

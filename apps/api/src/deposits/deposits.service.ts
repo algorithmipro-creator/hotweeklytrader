@@ -8,7 +8,7 @@ import { randomUUID } from 'crypto';
 const DEPOSIT_ADDRESSES: Record<string, string> = {
   BSC: '0x1fFFbcda5bB208CbAd95882a9e57FA9354533AaC',
   TON: 'TON adress1',
-  TRON: 'TRON adress1',
+  TRON: process.env.BLOCKCHAIN_TRON_DEPOSIT_ADDRESS || '',
 };
 
 @Injectable()

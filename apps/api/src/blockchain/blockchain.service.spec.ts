@@ -1,14 +1,24 @@
 import { Test } from '@nestjs/testing';
 import { BlockchainService } from './blockchain.service';
-import { EvmWatcherService } from './networks/evm-watcher.service';
+import { BscScanWatcherService } from './networks/bscscan-watcher.service';
+import { TronUsdtWatcherService } from './networks/tron-usdt-watcher.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DepositsService } from '../deposits/deposits.service';
 
 describe('BlockchainService', () => {
   let service: BlockchainService;
 
-  const mockEvmWatcher = {
+  const mockBscWatcher = {
     getNetworkName: jest.fn().mockReturnValue('BSC'),
+    start: jest.fn(),
+    stop: jest.fn(),
+    isRunning: jest.fn().mockReturnValue(true),
+    getLatestBlock: jest.fn().mockResolvedValue(0),
+    checkTransaction: jest.fn(),
+  };
+
+  const mockTronWatcher = {
+    getNetworkName: jest.fn().mockReturnValue('TRON'),
     start: jest.fn(),
     stop: jest.fn(),
     isRunning: jest.fn().mockReturnValue(true),
@@ -32,7 +42,8 @@ describe('BlockchainService', () => {
     const module = await Test.createTestingModule({
       providers: [
         BlockchainService,
-        { provide: EvmWatcherService, useValue: mockEvmWatcher },
+        { provide: BscScanWatcherService, useValue: mockBscWatcher },
+        { provide: TronUsdtWatcherService, useValue: mockTronWatcher },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: DepositsService, useValue: mockDeposits },
       ],
@@ -47,8 +58,13 @@ describe('BlockchainService', () => {
   });
 
   describe('getWatcherForNetwork', () => {
-    it('should return EVM watcher for BSC', () => {
+    it('should return watcher for BSC', () => {
       const watcher = service['getWatcherForNetwork']('BSC');
+      expect(watcher).toBeDefined();
+    });
+
+    it('should return watcher for TRON', () => {
+      const watcher = service['getWatcherForNetwork']('TRON');
       expect(watcher).toBeDefined();
     });
   });

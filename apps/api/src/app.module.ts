@@ -17,6 +17,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SupportModule } from './support/support.module';
 import { WalletsModule } from './wallets/wallets.module';
 import appConfig from './config/app.config';
+import blockchainConfig from './config/blockchain.config';
 import databaseConfig from './config/database.config';
 import telegramConfig from './config/telegram.config';
 import jwtConfig from './config/jwt.config';
@@ -25,7 +26,7 @@ import jwtConfig from './config/jwt.config';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, telegramConfig, jwtConfig],
+      load: [appConfig, databaseConfig, telegramConfig, jwtConfig, blockchainConfig],
     }),
     ThrottlerModule.forRoot([{
       ttl: 60000,

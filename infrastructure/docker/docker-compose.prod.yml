@@ -47,6 +47,9 @@ services:
       BLOCKCHAIN_BSC_RPC_URL: ${BLOCKCHAIN_BSC_RPC_URL:-https://bsc-dataseed.binance.org}
       BLOCKCHAIN_BSC_CONFIRMATIONS: ${BLOCKCHAIN_BSC_CONFIRMATIONS:-12}
       BLOCKCHAIN_BSC_DEPOSIT_ADDRESS: ${BLOCKCHAIN_BSC_DEPOSIT_ADDRESS}
+      BLOCKCHAIN_TRON_RPC_URL: ${BLOCKCHAIN_TRON_RPC_URL:-https://api.trongrid.io}
+      BLOCKCHAIN_TRON_CONFIRMATIONS: ${BLOCKCHAIN_TRON_CONFIRMATIONS:-19}
+      BLOCKCHAIN_TRON_DEPOSIT_ADDRESS: ${BLOCKCHAIN_TRON_DEPOSIT_ADDRESS}
       BLOCKCHAIN_BSCSCAN_API_KEY: ${BLOCKCHAIN_BSCSCAN_API_KEY}
       TATUM_API_KEY: ${TATUM_API_KEY}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
@@ -60,7 +63,7 @@ services:
       - internal
       - web
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/v1/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3

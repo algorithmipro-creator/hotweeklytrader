@@ -37,7 +37,7 @@ export class BotService {
       ctx.session.username = ctx.from?.username;
 
       const keyboard = new InlineKeyboard()
-        .url('\uD83D\uDCCA Open Mini App', this.miniAppUrl)
+        .webApp('\uD83D\uDCCA Open Mini App', this.miniAppUrl)
         .row()
         .text('\u2753 FAQ', 'faq')
         .text('\uD83C\uDD98 Support', 'support');
@@ -54,7 +54,7 @@ export class BotService {
 
     this.bot.command('menu', async (ctx) => {
       const keyboard = new InlineKeyboard()
-        .url('\uD83D\uDCCA Open Mini App', this.miniAppUrl)
+        .webApp('\uD83D\uDCCA Open Mini App', this.miniAppUrl)
         .row()
         .text('\u2753 FAQ', 'faq')
         .text('\uD83C\uDD98 Support', 'support');
@@ -109,7 +109,7 @@ export class BotService {
 
     this.bot.on('message:text', async (ctx) => {
       const keyboard = new InlineKeyboard()
-        .url('\uD83D\uDCCA Open Mini App', this.miniAppUrl);
+        .webApp('\uD83D\uDCCA Open Mini App', this.miniAppUrl);
 
       await ctx.reply(
         `I didn't understand that. Use /menu to see available options.`,

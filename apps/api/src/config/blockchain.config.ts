@@ -14,5 +14,6 @@ export default registerAs('blockchain', () => ({
   tron: {
     rpcUrl: process.env.BLOCKCHAIN_TRON_RPC_URL || 'https://api.trongrid.io',
     confirmationsRequired: parseInt(process.env.BLOCKCHAIN_TRON_CONFIRMATIONS || '19', 10),
+    depositAddress: process.env.BLOCKCHAIN_TRON_DEPOSIT_ADDRESS || '',
   },
 }));
