@@ -59,6 +59,17 @@ describe('PeriodsService', () => {
         orderBy: { start_date: 'asc' },
       });
     });
+
+    it('should return all periods for the admin sentinel', async () => {
+      mockPrisma.investmentPeriod.findMany.mockResolvedValue([]);
+
+      await service.findAll('ALL');
+
+      expect(mockPrisma.investmentPeriod.findMany).toHaveBeenCalledWith({
+        where: undefined,
+        orderBy: { start_date: 'asc' },
+      });
+    });
   });
 
   describe('findOne', () => {

@@ -9,7 +9,11 @@ export class PeriodsService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(status?: string) {
-    const where = status ? { status: status as InvestmentPeriodStatus } : { status: InvestmentPeriodStatus.TRADING_ACTIVE };
+    const where = status && status !== 'ALL'
+      ? { status: status as InvestmentPeriodStatus }
+      : status === 'ALL'
+        ? undefined
+        : { status: InvestmentPeriodStatus.TRADING_ACTIVE };
 
     const periods = await this.prisma.investmentPeriod.findMany({
       where,

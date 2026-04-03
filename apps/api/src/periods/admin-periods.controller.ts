@@ -14,7 +14,7 @@ export class AdminPeriodsController {
 
   @Get()
   async findAll(@Query('status') status?: string): Promise<PeriodDto[]> {
-    return this.periodsService.findAll(status);
+    return this.periodsService.findAll(status || 'ALL');
   }
 
   @Get(':id')
