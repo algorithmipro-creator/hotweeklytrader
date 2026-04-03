@@ -69,8 +69,10 @@ export class PeriodsService {
     if (dto.start_date) updateData.start_date = new Date(dto.start_date);
     if (dto.end_date) updateData.end_date = new Date(dto.end_date);
     if (dto.lock_date) updateData.lock_date = new Date(dto.lock_date);
-    if (dto.status) {
+    if (dto.status && dto.status !== existing.status) {
       PeriodTransitionGuard.assertCanTransition(existing.status, dto.status);
+      updateData.status = dto.status as unknown as InvestmentPeriodStatus;
+    } else if (dto.status) {
       updateData.status = dto.status as unknown as InvestmentPeriodStatus;
     }
     if (dto.accepted_networks) updateData.accepted_networks = dto.accepted_networks;
@@ -93,7 +95,9 @@ export class PeriodsService {
       throw new NotFoundException('Investment period not found');
     }
 
-    PeriodTransitionGuard.assertCanTransition(existing.status, status);
+    if (existing.status !== status) {
+      PeriodTransitionGuard.assertCanTransition(existing.status, status);
+    }
 
     const period = await this.prisma.investmentPeriod.update({
       where: { investment_period_id: id },

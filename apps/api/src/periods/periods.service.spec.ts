@@ -91,6 +91,26 @@ describe('PeriodsService', () => {
     });
   });
 
+  describe('update', () => {
+    it('allows same-status updates without failing transition validation', async () => {
+      mockPrisma.investmentPeriod.findUnique.mockResolvedValue(basePeriod);
+      mockPrisma.investmentPeriod.update.mockResolvedValue(basePeriod);
+
+      await expect(
+        service.update('period-1', {
+          status: 'FUNDING',
+        } as any),
+      ).resolves.toMatchObject({
+        status: 'FUNDING',
+      });
+
+      expect(mockPrisma.investmentPeriod.update).toHaveBeenCalledWith({
+        where: { investment_period_id: 'period-1' },
+        data: { status: 'FUNDING' },
+      });
+    });
+  });
+
   describe('updateStatus', () => {
     it('allows only forward transitions', async () => {
       mockPrisma.investmentPeriod.findUnique.mockResolvedValue(basePeriod);

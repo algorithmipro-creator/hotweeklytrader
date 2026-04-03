@@ -3,6 +3,24 @@
 import { useState, useEffect } from 'react';
 import { getAdminPeriods, createPeriod, updatePeriodStatus } from '../../lib/api';
 
+const PERIOD_STATUSES = ['FUNDING', 'TRADING_ACTIVE', 'REPORTING', 'PAYOUT_IN_PROGRESS', 'CLOSED'] as const;
+
+const STATUS_LABELS: Record<(typeof PERIOD_STATUSES)[number], string> = {
+  FUNDING: 'Funding',
+  TRADING_ACTIVE: 'Trading active',
+  REPORTING: 'Reporting',
+  PAYOUT_IN_PROGRESS: 'Payout in progress',
+  CLOSED: 'Closed',
+};
+
+const STATUS_BADGES: Record<(typeof PERIOD_STATUSES)[number], string> = {
+  FUNDING: 'bg-success/20 text-success',
+  TRADING_ACTIVE: 'bg-primary/20 text-primary',
+  REPORTING: 'bg-warning/20 text-warning',
+  PAYOUT_IN_PROGRESS: 'bg-link/20 text-link',
+  CLOSED: 'bg-gray-500/20 text-gray-400',
+};
+
 export default function PeriodsPage() {
   const [periods, setPeriods] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -14,6 +32,7 @@ export default function PeriodsPage() {
     end_date: '',
     accepted_networks: 'BSC,TRON,TON',
     accepted_assets: 'USDT,USDC',
+    status: 'FUNDING',
   });
 
   useEffect(() => {
@@ -101,6 +120,17 @@ export default function PeriodsPage() {
             placeholder="Assets (comma-separated)"
             className="w-full px-3 py-2 bg-bg-tertiary rounded-lg text-sm text-text"
           />
+          <select
+            value={formData.status}
+            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+            className="w-full px-3 py-2 bg-bg-tertiary rounded-lg text-sm text-text"
+          >
+            {PERIOD_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {STATUS_LABELS[status]}
+              </option>
+            ))}
+          </select>
           <button type="submit" className="w-full px-4 py-2 bg-success text-white rounded-lg text-sm">
             Create Period
           </button>
@@ -129,12 +159,7 @@ export default function PeriodsPage() {
                 <td className="p-3 text-text-secondary">{p.accepted_networks.join(', ')}</td>
                 <td className="p-3 text-text-secondary">{p.accepted_assets.join(', ')}</td>
                 <td className="p-3">
-                  <span className={`px-2 py-0.5 rounded text-xs ${
-                    p.status === 'ACTIVE' ? 'bg-success/20 text-success' :
-                    p.status === 'DRAFT' ? 'bg-gray-500/20 text-gray-400' :
-                    p.status === 'COMPLETED' ? 'bg-link/20 text-link' :
-                    'bg-warning/20 text-warning'
-                  }`}>
+                  <span className={`px-2 py-0.5 rounded text-xs ${STATUS_BADGES[p.status as keyof typeof STATUS_BADGES] || 'bg-gray-500/20 text-gray-400'}`}>
                     {p.status}
                   </span>
                 </td>
@@ -144,11 +169,11 @@ export default function PeriodsPage() {
                     onChange={(e) => handleStatusChange(p.investment_period_id, e.target.value)}
                     className="bg-bg-tertiary text-text text-xs px-2 py-1 rounded"
                   >
-                    <option value="DRAFT">Draft</option>
-                    <option value="ACTIVE">Active</option>
-                    <option value="LOCKED">Locked</option>
-                    <option value="COMPLETED">Completed</option>
-                    <option value="ARCHIVED">Archived</option>
+                    {PERIOD_STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {STATUS_LABELS[status]}
+                      </option>
+                    ))}
                   </select>
                 </td>
               </tr>
