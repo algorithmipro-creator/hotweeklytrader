@@ -18,7 +18,7 @@ async function main() {
     });
   }
 
-  // Create active investment period "1 неделя"
+  // Create funding investment period "1 неделя"
   const now = new Date();
   const startDate = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
   const endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -30,7 +30,7 @@ async function main() {
       start_date: startDate,
       end_date: endDate,
       lock_date: startDate,
-      status: InvestmentPeriodStatus.ACTIVE,
+      status: InvestmentPeriodStatus.FUNDING,
       accepted_networks: ['BSC', 'TRON', 'TON'],
       accepted_assets: ['USDT', 'USDC'],
       minimum_amount_rules: { default: 100 },

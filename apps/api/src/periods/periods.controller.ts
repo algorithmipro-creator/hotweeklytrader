@@ -8,7 +8,7 @@ export class PeriodsController {
 
   @Get()
   async findAll(): Promise<PeriodDto[]> {
-    return this.periodsService.findAll('ACTIVE');
+    return this.periodsService.findAll('TRADING_ACTIVE');
   }
 
   @Get(':id')

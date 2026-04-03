@@ -24,9 +24,9 @@ export class PeriodCompletionJob {
 
     await this.prisma.investmentPeriod.update({
       where: { investment_period_id: periodId },
-      data: { status: 'COMPLETED' },
+      data: { status: 'CLOSED' },
     });
 
-    this.logger.log(`Period ${periodId} marked as completed`);
+    this.logger.log(`Period ${periodId} marked as closed`);
   }
 }
