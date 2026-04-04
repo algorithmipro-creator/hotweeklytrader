@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PayoutStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { COUNTABLE_CONFIRMED_USDT_STATUSES } from './period-analytics.service';
 
@@ -8,10 +8,21 @@ type PayoutRegistryItem = {
   deposit_id: string;
   network: string;
   asset_symbol: string;
+  source_address: string | null;
+  deposit_amount_usdt: Prisma.Decimal;
+  share_ratio: Prisma.Decimal;
   confirmed_amount_usdt: Prisma.Decimal;
   network_fee_bucket_usdt: Prisma.Decimal;
   network_fee_allocation_usdt: Prisma.Decimal;
+  payout_gross_usdt: Prisma.Decimal;
+  payout_fee_usdt: Prisma.Decimal;
+  payout_net_usdt: Prisma.Decimal;
   payout_amount_usdt: Prisma.Decimal;
+  status: PayoutStatus;
+  tx_hash: string | null;
+  sent_at: Date | null;
+  completed_at: Date | null;
+  failure_reason: string | null;
   created_at: Date;
 };
 
@@ -33,6 +44,7 @@ type DepositRecord = {
   deposit_id: string;
   network: string;
   asset_symbol: string;
+  source_address: string | null;
   confirmed_amount: Prisma.Decimal | number | null;
 };
 
@@ -41,10 +53,21 @@ export type PeriodPayoutRegistryItemDto = {
   deposit_id: string;
   network: string;
   asset_symbol: string;
+  source_address: string | null;
+  deposit_amount_usdt: number;
+  share_ratio: number;
   confirmed_amount_usdt: number;
   network_fee_bucket_usdt: number;
   network_fee_allocation_usdt: number;
+  payout_gross_usdt: number;
+  payout_fee_usdt: number;
+  payout_net_usdt: number;
   payout_amount_usdt: number;
+  status: PayoutStatus;
+  tx_hash: string | null;
+  sent_at: string | null;
+  completed_at: string | null;
+  failure_reason: string | null;
   created_at: string;
 };
 
@@ -115,12 +138,10 @@ export class PeriodPayoutRegistryService {
     const snapshot = period.settlement_snapshot;
     const totalDepositsUsdt = this.decimal(snapshot.total_deposits_usdt);
 
-    const networkFees = this.normalizeFees(snapshot.network_fees_json);
-    const networkFeeDecimals = {
-      TRON: new Prisma.Decimal(networkFees.TRON),
-      TON: new Prisma.Decimal(networkFees.TON),
-      BSC: new Prisma.Decimal(networkFees.BSC),
-    };
+  const networkFees = this.normalizeFees(snapshot.network_fees_json);
+    const networkFeeDecimals = this.toDecimalFees(snapshot.network_fees_json);
+    const totalNetworkFees = networkFeeDecimals.TRON.add(networkFeeDecimals.TON).add(networkFeeDecimals.BSC);
+    const grossDistributableUsdt = this.decimal(snapshot.net_distributable_usdt).add(totalNetworkFees);
     const deposits = (await prisma.deposit.findMany({
       where: {
         investment_period_id: periodId,
@@ -134,6 +155,7 @@ export class PeriodPayoutRegistryService {
         deposit_id: true,
         network: true,
         asset_symbol: true,
+        source_address: true,
         confirmed_amount: true,
       },
     })) as DepositRecord[];
@@ -145,26 +167,41 @@ export class PeriodPayoutRegistryService {
       return acc;
     }, {} as Record<string, Prisma.Decimal>);
 
-    const items = deposits.map((deposit: DepositRecord) => {
+  const items = deposits.map((deposit: DepositRecord) => {
       const confirmedAmount = this.decimal(deposit.confirmed_amount);
+      const shareRatio = totalDepositsUsdt.isZero()
+        ? ZERO
+        : confirmedAmount.div(totalDepositsUsdt);
       const networkKey = deposit.network as keyof PeriodPayoutRegistryDto['networkFeesUsdt'];
       const networkBucket = networkFeeDecimals[networkKey] || ZERO;
       const networkTotal = networkTotals[deposit.network] || ZERO;
       const networkFeeAllocation = networkTotal.isZero()
         ? ZERO
         : networkBucket.mul(confirmedAmount).div(networkTotal);
-      const payoutAmount = totalDepositsUsdt.isZero()
-        ? ZERO
-        : this.decimal(snapshot.net_distributable_usdt).mul(confirmedAmount).div(totalDepositsUsdt);
+      const payoutGross = grossDistributableUsdt.mul(shareRatio);
+      const payoutFee = networkFeeAllocation;
+      const payoutNet = payoutGross.sub(payoutFee);
+      const payoutAmount = payoutNet;
 
       return {
         deposit_id: deposit.deposit_id,
         network: deposit.network,
         asset_symbol: deposit.asset_symbol,
+        source_address: deposit.source_address,
+        deposit_amount_usdt: confirmedAmount,
+        share_ratio: shareRatio,
         confirmed_amount_usdt: confirmedAmount,
         network_fee_bucket_usdt: networkBucket,
         network_fee_allocation_usdt: networkFeeAllocation,
+        payout_gross_usdt: payoutGross,
+        payout_fee_usdt: payoutFee,
+        payout_net_usdt: payoutNet,
         payout_amount_usdt: payoutAmount,
+        status: PayoutStatus.PREPARED,
+        tx_hash: null,
+        sent_at: null,
+        completed_at: null,
+        failure_reason: null,
       };
     });
 
@@ -220,10 +257,21 @@ export class PeriodPayoutRegistryService {
         deposit_id: item.deposit_id,
         network: item.network,
         asset_symbol: item.asset_symbol,
+        source_address: item.source_address,
+        deposit_amount_usdt: this.toNumber(item.deposit_amount_usdt),
+        share_ratio: this.toNumber(item.share_ratio),
         confirmed_amount_usdt: this.toNumber(item.confirmed_amount_usdt),
         network_fee_bucket_usdt: this.toNumber(item.network_fee_bucket_usdt),
         network_fee_allocation_usdt: this.toNumber(item.network_fee_allocation_usdt),
+        payout_gross_usdt: this.toNumber(item.payout_gross_usdt),
+        payout_fee_usdt: this.toNumber(item.payout_fee_usdt),
+        payout_net_usdt: this.toNumber(item.payout_net_usdt),
         payout_amount_usdt: this.toNumber(item.payout_amount_usdt),
+        status: item.status,
+        tx_hash: item.tx_hash,
+        sent_at: item.sent_at?.toISOString() || null,
+        completed_at: item.completed_at?.toISOString() || null,
+        failure_reason: item.failure_reason,
         created_at: item.created_at.toISOString(),
       })),
     };
@@ -238,12 +286,30 @@ export class PeriodPayoutRegistryService {
     };
   }
 
+  private toDecimalFees(value: Prisma.JsonValue | null | undefined): Record<'TRON' | 'TON' | 'BSC', Prisma.Decimal> {
+    const fees = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+    return {
+      TRON: this.toDecimal(fees.TRON),
+      TON: this.toDecimal(fees.TON),
+      BSC: this.toDecimal(fees.BSC),
+    };
+  }
+
   private decimal(value: Prisma.Decimal | number | null | undefined): Prisma.Decimal {
     if (value == null) {
       return ZERO;
     }
     if (value instanceof Prisma.Decimal) return value;
     return new Prisma.Decimal(value);
+  }
+
+  private toDecimal(value: unknown): Prisma.Decimal {
+    if (value == null) {
+      return ZERO;
+    }
+    if (value instanceof Prisma.Decimal) return value;
+    if (typeof value === 'number' || typeof value === 'string') return new Prisma.Decimal(value);
+    return ZERO;
   }
 
   private toNumber(value: Prisma.Decimal | number | null | undefined): number {

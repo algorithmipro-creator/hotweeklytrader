@@ -287,10 +287,21 @@ model PeriodPayoutRegistryItem {
   deposit_id                String
   network                   String
   asset_symbol              String
+  source_address            String?
+  deposit_amount_usdt       Decimal
+  share_ratio               Decimal
   confirmed_amount_usdt     Decimal
   network_fee_bucket_usdt   Decimal
   network_fee_allocation_usdt Decimal
+  payout_gross_usdt         Decimal
+  payout_fee_usdt           Decimal
+  payout_net_usdt           Decimal
   payout_amount_usdt        Decimal
+  status                    PayoutStatus @default(PREPARED)
+  tx_hash                   String?
+  sent_at                   DateTime?
+  completed_at              DateTime?
+  failure_reason            String?
   created_at                DateTime @default(now())
 
   payout_registry           PeriodPayoutRegistry @relation(fields: [payout_registry_id], references: [payout_registry_id], onDelete: Cascade)

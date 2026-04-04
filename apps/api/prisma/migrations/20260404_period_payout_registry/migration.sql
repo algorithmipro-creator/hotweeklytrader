@@ -36,10 +36,21 @@ BEGIN
       "deposit_id" TEXT NOT NULL,
       "network" TEXT NOT NULL,
       "asset_symbol" TEXT NOT NULL,
+      "source_address" TEXT,
+      "deposit_amount_usdt" DECIMAL(65,30) NOT NULL,
+      "share_ratio" DECIMAL(65,30) NOT NULL,
       "confirmed_amount_usdt" DECIMAL(65,30) NOT NULL,
       "network_fee_bucket_usdt" DECIMAL(65,30) NOT NULL,
       "network_fee_allocation_usdt" DECIMAL(65,30) NOT NULL,
+      "payout_gross_usdt" DECIMAL(65,30) NOT NULL,
+      "payout_fee_usdt" DECIMAL(65,30) NOT NULL,
+      "payout_net_usdt" DECIMAL(65,30) NOT NULL,
       "payout_amount_usdt" DECIMAL(65,30) NOT NULL,
+      "status" "PayoutStatus" NOT NULL DEFAULT 'PREPARED',
+      "tx_hash" TEXT,
+      "sent_at" TIMESTAMP(3),
+      "completed_at" TIMESTAMP(3),
+      "failure_reason" TEXT,
       "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
       CONSTRAINT "PeriodPayoutRegistryItem_pkey" PRIMARY KEY ("payout_registry_item_id"),
@@ -79,5 +90,7 @@ BEGIN
       ON "PeriodPayoutRegistryItem" ("deposit_id");
     CREATE INDEX IF NOT EXISTS "PeriodPayoutRegistryItem_network_idx"
       ON "PeriodPayoutRegistryItem" ("network");
+    CREATE INDEX IF NOT EXISTS "PeriodPayoutRegistryItem_status_idx"
+      ON "PeriodPayoutRegistryItem" ("status");
   END IF;
 END $$;

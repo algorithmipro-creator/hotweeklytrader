@@ -55,10 +55,21 @@ type PeriodPayoutRegistryItem = {
   deposit_id: string;
   network: string;
   asset_symbol: string;
+  source_address: string | null;
+  deposit_amount_usdt: number;
+  share_ratio: number;
   confirmed_amount_usdt: number;
   network_fee_bucket_usdt: number;
   network_fee_allocation_usdt: number;
+  payout_gross_usdt: number;
+  payout_fee_usdt: number;
+  payout_net_usdt: number;
   payout_amount_usdt: number;
+  status: string;
+  tx_hash: string | null;
+  sent_at: string | null;
+  completed_at: string | null;
+  failure_reason: string | null;
   created_at: string;
 };
 
@@ -370,26 +381,39 @@ export default function PeriodDetailPage() {
                 <thead className="text-text-secondary">
                   <tr>
                     <th className="text-left py-2 pr-3">Deposit</th>
+                    <th className="text-left py-2 pr-3">Source</th>
                     <th className="text-left py-2 pr-3">Network</th>
-                    <th className="text-right py-2 pr-3">Confirmed USDT</th>
-                    <th className="text-right py-2 pr-3">Fee bucket</th>
-                    <th className="text-right py-2 pr-3">Fee allocation</th>
-                    <th className="text-right py-2 pr-3">Payout amount</th>
+                    <th className="text-right py-2 pr-3">Deposit USDT</th>
+                    <th className="text-right py-2 pr-3">Share</th>
+                    <th className="text-right py-2 pr-3">Gross</th>
+                    <th className="text-right py-2 pr-3">Fee</th>
+                    <th className="text-right py-2 pr-3">Net</th>
+                    <th className="text-left py-2 pr-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {payoutRegistry.items.map((item) => (
                     <tr key={item.payout_registry_item_id} className="border-t border-gray-700">
                       <td className="py-2 pr-3 text-text-secondary">{item.deposit_id}</td>
+                      <td className="py-2 pr-3 text-text-secondary">{item.source_address || 'n/a'}</td>
                       <td className="py-2 pr-3 text-text-secondary">{item.network}</td>
-                      <td className="py-2 pr-3 text-right">{money.format(item.confirmed_amount_usdt)}</td>
-                      <td className="py-2 pr-3 text-right">{money.format(item.network_fee_bucket_usdt)}</td>
-                      <td className="py-2 pr-3 text-right">{money.format(item.network_fee_allocation_usdt)}</td>
-                      <td className="py-2 pr-3 text-right font-medium">{money.format(item.payout_amount_usdt)}</td>
+                      <td className="py-2 pr-3 text-right">{money.format(item.deposit_amount_usdt)}</td>
+                      <td className="py-2 pr-3 text-right">{money.format(item.share_ratio * 100)}%</td>
+                      <td className="py-2 pr-3 text-right">{money.format(item.payout_gross_usdt)}</td>
+                      <td className="py-2 pr-3 text-right">{money.format(item.payout_fee_usdt)}</td>
+                      <td className="py-2 pr-3 text-right font-medium">{money.format(item.payout_net_usdt)}</td>
+                      <td className="py-2 pr-3 text-text-secondary">{item.status}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <div className="mt-3 text-xs text-text-secondary space-y-1">
+                {payoutRegistry.items.some((item) => item.tx_hash || item.failure_reason) && (
+                  <div>
+                    Registry metadata available for later execution tracking.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ) : (
