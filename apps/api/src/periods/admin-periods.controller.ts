@@ -1,6 +1,7 @@
 import {
   Controller, Get, Post, Put, Param, Body, Query, UseGuards,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PeriodsService } from './periods.service';
 import { PeriodAnalyticsService } from './period-analytics.service';
 import { PeriodSettlementService } from './period-settlement.service';
@@ -36,7 +37,7 @@ export class AdminPeriodsController {
 
     return periods.map((period: any) => ({
       ...period,
-      ...summaries[period.investment_period_id],
+      ...this.serializeSummary(summaries[period.investment_period_id]),
     }));
   }
 
@@ -46,7 +47,7 @@ export class AdminPeriodsController {
     const settlementSnapshot = await this.settlementService.getSnapshot(id);
     return {
       ...period,
-      ...(await this.analyticsService.getSummary(period.investment_period_id)),
+      ...this.serializeSummary(await this.analyticsService.getSummary(period.investment_period_id)),
       settlement_snapshot: settlementSnapshot,
     };
   }
@@ -90,5 +91,19 @@ export class AdminPeriodsController {
     @Body('status') status: PeriodStatus,
   ): Promise<PeriodDto> {
     return this.periodsService.updateStatus(id, status);
+  }
+
+  private serializeSummary(summary: any) {
+    return {
+      depositCount: summary.depositCount,
+      totalDepositedUsdt: this.toNumber(summary.totalDepositedUsdt),
+      averageDepositUsdt: this.toNumber(summary.averageDepositUsdt),
+    };
+  }
+
+  private toNumber(value: Prisma.Decimal | number | null | undefined): number {
+    if (value == null) return 0;
+    if (typeof value === 'number') return value;
+    return value.toNumber();
   }
 }

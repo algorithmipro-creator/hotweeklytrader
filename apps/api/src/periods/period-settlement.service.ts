@@ -236,8 +236,12 @@ export class PeriodSettlementService {
     return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
   }
 
-  private requiredDecimal(value: number | undefined, fieldName: string): Prisma.Decimal {
-    if (value == null || !Number.isFinite(value)) {
+  private requiredDecimal(value: Prisma.Decimal | number | undefined, fieldName: string): Prisma.Decimal {
+    if (value == null) {
+      throw new BadRequestException(`${fieldName} must be a valid number`);
+    }
+    if (value instanceof Prisma.Decimal) return value;
+    if (!Number.isFinite(value)) {
       throw new BadRequestException(`${fieldName} must be a valid number`);
     }
     return new Prisma.Decimal(value);

@@ -23,8 +23,8 @@ export class PeriodAnalyticsService {
     const summaries = await this.getSummaries([periodId]);
     return summaries[periodId] || {
       depositCount: 0,
-      totalDepositedUsdt: 0,
-      averageDepositUsdt: 0,
+      totalDepositedUsdt: new Prisma.Decimal(0),
+      averageDepositUsdt: new Prisma.Decimal(0),
     };
   }
 
@@ -48,31 +48,31 @@ export class PeriodAnalyticsService {
       },
     });
 
-    const summaries: Record<string, { depositCount: number; totalDepositedUsdt: number; averageDepositUsdt: number }> = {};
+    const summaries: Record<string, { depositCount: number; totalDepositedUsdt: Prisma.Decimal; averageDepositUsdt: Prisma.Decimal }> = {};
     for (const periodId of periodIds) {
       summaries[periodId] = {
         depositCount: 0,
-        totalDepositedUsdt: 0,
-        averageDepositUsdt: 0,
+        totalDepositedUsdt: new Prisma.Decimal(0),
+        averageDepositUsdt: new Prisma.Decimal(0),
       };
     }
 
     for (const aggregate of aggregates as any[]) {
       const depositCount = aggregate._count.deposit_id || 0;
-      const totalDepositedUsdt = this.toNumber(aggregate._sum.confirmed_amount);
+      const totalDepositedUsdt = this.toDecimal(aggregate._sum.confirmed_amount);
       summaries[aggregate.investment_period_id] = {
         depositCount,
         totalDepositedUsdt,
-        averageDepositUsdt: depositCount === 0 ? 0 : totalDepositedUsdt / depositCount,
+        averageDepositUsdt: depositCount === 0 ? new Prisma.Decimal(0) : totalDepositedUsdt.div(depositCount),
       };
     }
 
     return summaries;
   }
 
-  private toNumber(value: Prisma.Decimal | number | null | undefined): number {
-    if (value == null) return 0;
-    if (typeof value === 'number') return value;
-    return value.toNumber();
+  private toDecimal(value: Prisma.Decimal | number | null | undefined): Prisma.Decimal {
+    if (value == null) return new Prisma.Decimal(0);
+    if (typeof value === 'number') return new Prisma.Decimal(value);
+    return value;
   }
 }

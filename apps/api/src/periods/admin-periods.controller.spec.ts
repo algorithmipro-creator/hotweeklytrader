@@ -112,7 +112,6 @@ describe('AdminPeriodsController', () => {
       controller.previewSettlement('period-1', {
         ending_balance_usdt: 350,
         trader_fee_percent: 40,
-        preview_signature: 'sig-1',
       } as any),
     ).resolves.toEqual({
       investment_period_id: 'period-1',
@@ -150,8 +149,8 @@ describe('AdminPeriodsController', () => {
     expect(mockSettlementService.preview).toHaveBeenCalledWith('period-1', expect.objectContaining({
       ending_balance_usdt: 350,
       trader_fee_percent: 40,
-      preview_signature: 'sig-1',
     }));
+    expect(Object.prototype.hasOwnProperty.call(mockSettlementService.preview.mock.calls[0][1], 'preview_signature')).toBe(false);
     expect(mockSettlementService.approve).toHaveBeenCalledWith('period-1', expect.objectContaining({
       ending_balance_usdt: 350,
       trader_fee_percent: 40,
