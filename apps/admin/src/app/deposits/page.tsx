@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { getAdminDeposits } from '../../lib/api';
 import { StatusBadge } from '../../components/status-badge';
@@ -10,16 +10,34 @@ export default function DepositsPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [periodFilter, setPeriodFilter] = useState('');
+  const requestSeq = useRef(0);
 
   useEffect(() => {
-    getAdminDeposits({
-      status: statusFilter || undefined,
-      investment_period_id: periodFilter || undefined,
-      limit: 100,
-    })
-      .then(setDeposits)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    const currentRequest = ++requestSeq.current;
+    const timeout = setTimeout(() => {
+      getAdminDeposits({
+        status: statusFilter || undefined,
+        investment_period_id: periodFilter || undefined,
+        limit: 100,
+      })
+        .then((data) => {
+          if (currentRequest === requestSeq.current) {
+            setDeposits(data);
+          }
+        })
+        .catch((error) => {
+          if (currentRequest === requestSeq.current) {
+            console.error(error);
+          }
+        })
+        .finally(() => {
+          if (currentRequest === requestSeq.current) {
+            setLoading(false);
+          }
+        });
+    }, 250);
+
+    return () => clearTimeout(timeout);
   }, [statusFilter, periodFilter]);
 
   if (loading) return <div className="text-text-secondary">Loading...</div>;

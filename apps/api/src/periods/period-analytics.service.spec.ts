@@ -8,7 +8,7 @@ describe('PeriodAnalyticsService', () => {
 
   const mockPrisma = {
     deposit: {
-      aggregate: jest.fn(),
+      groupBy: jest.fn(),
     },
   };
 
@@ -25,10 +25,13 @@ describe('PeriodAnalyticsService', () => {
   });
 
   it('returns deposit count, total, and average for a period', async () => {
-    mockPrisma.deposit.aggregate.mockResolvedValue({
-      _count: { deposit_id: 2, confirmed_amount: 2 },
-      _sum: { confirmed_amount: new Prisma.Decimal('300') },
-    });
+    mockPrisma.deposit.groupBy.mockResolvedValue([
+      {
+        investment_period_id: 'period-1',
+        _count: { deposit_id: 2 },
+        _sum: { confirmed_amount: new Prisma.Decimal('300') },
+      },
+    ]);
 
     await expect(service.getSummary('period-1')).resolves.toEqual({
       depositCount: 2,
@@ -38,10 +41,7 @@ describe('PeriodAnalyticsService', () => {
   });
 
   it('returns zeros when there are no deposits', async () => {
-    mockPrisma.deposit.aggregate.mockResolvedValue({
-      _count: { deposit_id: 0, confirmed_amount: 0 },
-      _sum: { confirmed_amount: null },
-    });
+    mockPrisma.deposit.groupBy.mockResolvedValue([]);
 
     await expect(service.getSummary('period-1')).resolves.toEqual({
       depositCount: 0,
@@ -51,13 +51,16 @@ describe('PeriodAnalyticsService', () => {
   });
 
   it('does not average in deposits without confirmed amounts', async () => {
-    mockPrisma.deposit.aggregate.mockResolvedValue({
-      _count: { deposit_id: 3, confirmed_amount: 2 },
-      _sum: { confirmed_amount: new Prisma.Decimal('300') },
-    });
+    mockPrisma.deposit.groupBy.mockResolvedValue([
+      {
+        investment_period_id: 'period-1',
+        _count: { deposit_id: 2 },
+        _sum: { confirmed_amount: new Prisma.Decimal('300') },
+      },
+    ]);
 
     await expect(service.getSummary('period-1')).resolves.toEqual({
-      depositCount: 3,
+      depositCount: 2,
       totalDepositedUsdt: 300,
       averageDepositUsdt: 150,
     });

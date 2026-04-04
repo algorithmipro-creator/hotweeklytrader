@@ -7,30 +7,53 @@ export class PeriodAnalyticsService {
   constructor(private prisma: PrismaService) {}
 
   async getSummary(periodId: string) {
-    const aggregate = await this.prisma.deposit.aggregate({
+    const summaries = await this.getSummaries([periodId]);
+    return summaries[periodId] || {
+      depositCount: 0,
+      totalDepositedUsdt: 0,
+      averageDepositUsdt: 0,
+    };
+  }
+
+  async getSummaries(periodIds: string[]) {
+    if (periodIds.length === 0) return {};
+
+    const aggregates = await this.prisma.deposit.groupBy({
+      by: ['investment_period_id'],
       where: {
-        investment_period_id: periodId,
+        investment_period_id: { in: periodIds },
         status: { not: 'CANCELLED' },
+        asset_symbol: 'USDT',
+        confirmed_amount: { not: null },
       },
       _count: {
         deposit_id: true,
+      },
+      _sum: {
         confirmed_amount: true,
       },
-      _sum: { confirmed_amount: true },
     });
 
-    const depositCount = aggregate._count.deposit_id || 0;
-    const confirmedDepositCount = aggregate._count.confirmed_amount || 0;
-    const totalDepositedUsdt = this.toNumber(aggregate._sum.confirmed_amount);
-    const averageDepositUsdt = confirmedDepositCount === 0
-      ? 0
-      : totalDepositedUsdt / confirmedDepositCount;
+    const summaries: Record<string, { depositCount: number; totalDepositedUsdt: number; averageDepositUsdt: number }> = {};
+    for (const periodId of periodIds) {
+      summaries[periodId] = {
+        depositCount: 0,
+        totalDepositedUsdt: 0,
+        averageDepositUsdt: 0,
+      };
+    }
 
-    return {
-      depositCount,
-      totalDepositedUsdt,
-      averageDepositUsdt,
-    };
+    for (const aggregate of aggregates as any[]) {
+      const depositCount = aggregate._count.deposit_id || 0;
+      const totalDepositedUsdt = this.toNumber(aggregate._sum.confirmed_amount);
+      summaries[aggregate.investment_period_id] = {
+        depositCount,
+        totalDepositedUsdt,
+        averageDepositUsdt: depositCount === 0 ? 0 : totalDepositedUsdt / depositCount,
+      };
+    }
+
+    return summaries;
   }
 
   private toNumber(value: Prisma.Decimal | number | null | undefined): number {
