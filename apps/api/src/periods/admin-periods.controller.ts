@@ -20,17 +20,13 @@ export class AdminPeriodsController {
   @Get()
   async findAll(@Query('status') status?: string): Promise<PeriodDto[]> {
     const periods = await this.periodsService.findAll(status || 'ALL');
-    return Promise.all(
-      periods.map(async (period: any) => ({
-        ...period,
-        ...(await this.analyticsService.getSummary(period.investment_period_id)),
-      })),
-    );
+    return Promise.all(periods.map((period: any) => this.enrichWithSummary(period)));
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string): Promise<PeriodDto> {
-    return this.periodsService.findOne(id);
+    const period = await this.periodsService.findOne(id);
+    return this.enrichWithSummary(period);
   }
 
   @Post()
@@ -55,5 +51,12 @@ export class AdminPeriodsController {
     @Body('status') status: PeriodStatus,
   ): Promise<PeriodDto> {
     return this.periodsService.updateStatus(id, status);
+  }
+
+  private async enrichWithSummary(period: any): Promise<PeriodDto> {
+    return {
+      ...period,
+      ...(await this.analyticsService.getSummary(period.investment_period_id)),
+    };
   }
 }

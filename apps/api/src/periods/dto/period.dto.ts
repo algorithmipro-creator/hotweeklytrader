@@ -86,6 +86,9 @@ export class PeriodDto {
   accepted_assets: string[];
   minimum_amount_rules: any;
   maximum_amount_rules: any;
+  depositCount?: number;
+  totalDepositedUsdt?: number;
+  averageDepositUsdt?: number;
   created_at: string;
   updated_at: string;
 }
