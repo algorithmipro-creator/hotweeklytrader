@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { CONFIRMED_USDT_DEPOSIT_STATUSES, PeriodAnalyticsService } from './period-analytics.service';
+import { PeriodAnalyticsService } from './period-analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -43,9 +43,9 @@ describe('PeriodAnalyticsService', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           investment_period_id: { in: ['period-1'] },
-          status: { in: CONFIRMED_USDT_DEPOSIT_STATUSES },
           asset_symbol: 'USDT',
           confirmed_amount: { not: null },
+          confirmed_at: { not: null },
         }),
       }),
     );
@@ -75,5 +75,30 @@ describe('PeriodAnalyticsService', () => {
       totalDepositedUsdt: 300,
       averageDepositUsdt: 150,
     });
+  });
+
+  it('keeps manually reviewed confirmed deposits in the confirmed-only predicate', async () => {
+    mockPrisma.deposit.groupBy.mockResolvedValue([
+      {
+        investment_period_id: 'period-1',
+        _count: { deposit_id: 1 },
+        _sum: { confirmed_amount: new Prisma.Decimal('120') },
+      },
+    ]);
+
+    await expect(service.getSummary('period-1')).resolves.toEqual({
+      depositCount: 1,
+      totalDepositedUsdt: 120,
+      averageDepositUsdt: 120,
+    });
+
+    expect(mockPrisma.deposit.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          asset_symbol: 'USDT',
+          confirmed_at: { not: null },
+        }),
+      }),
+    );
   });
 });

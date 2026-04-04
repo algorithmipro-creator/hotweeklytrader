@@ -2,18 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
-export const CONFIRMED_USDT_DEPOSIT_STATUSES = [
-  'CONFIRMED',
-  'ACTIVE',
-  'COMPLETED',
-  'REPORT_READY',
-  'PAYOUT_PENDING',
-  'PAYOUT_APPROVED',
-  'PAYOUT_SENT',
-  'PAYOUT_CONFIRMED',
-  'ON_HOLD',
-] as const;
-
 @Injectable()
 export class PeriodAnalyticsService {
   constructor(private prisma: PrismaService) {}
@@ -34,9 +22,9 @@ export class PeriodAnalyticsService {
       by: ['investment_period_id'],
       where: {
         investment_period_id: { in: periodIds },
-        status: { in: [...CONFIRMED_USDT_DEPOSIT_STATUSES] },
         asset_symbol: 'USDT',
         confirmed_amount: { not: null },
+        confirmed_at: { not: null },
       },
       _count: {
         deposit_id: true,
