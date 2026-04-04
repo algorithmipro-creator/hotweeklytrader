@@ -305,4 +305,24 @@ describe('PeriodSettlementService', () => {
       expect.arrayContaining(['ending_balance_usdt', 'trader_fee_percent', 'tron_network_fee_usdt']),
     );
   });
+
+  it('rejects out-of-bounds settlement fee inputs at the DTO boundary', async () => {
+    const dto = plainToInstance(PeriodSettlementInputDto, {
+      ending_balance_usdt: 150,
+      trader_fee_percent: 101,
+      tron_network_fee_usdt: -1,
+      ton_network_fee_usdt: -0.01,
+      bsc_network_fee_usdt: -5,
+    });
+    const errors = validateSync(dto);
+
+    expect(errors.map((error) => error.property)).toEqual(
+      expect.arrayContaining([
+        'trader_fee_percent',
+        'tron_network_fee_usdt',
+        'ton_network_fee_usdt',
+        'bsc_network_fee_usdt',
+      ]),
+    );
+  });
 });

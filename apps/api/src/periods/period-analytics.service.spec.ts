@@ -35,8 +35,8 @@ describe('PeriodAnalyticsService', () => {
 
     await expect(service.getSummary('period-1')).resolves.toEqual({
       depositCount: 2,
-      totalDepositedUsdt: 300,
-      averageDepositUsdt: 150,
+      totalDepositedUsdt: new Prisma.Decimal('300'),
+      averageDepositUsdt: new Prisma.Decimal('150'),
     });
 
     expect(mockPrisma.deposit.groupBy).toHaveBeenCalledWith(
@@ -57,8 +57,8 @@ describe('PeriodAnalyticsService', () => {
 
     await expect(service.getSummary('period-1')).resolves.toEqual({
       depositCount: 0,
-      totalDepositedUsdt: 0,
-      averageDepositUsdt: 0,
+      totalDepositedUsdt: new Prisma.Decimal('0'),
+      averageDepositUsdt: new Prisma.Decimal('0'),
     });
   });
 
@@ -73,8 +73,8 @@ describe('PeriodAnalyticsService', () => {
 
     await expect(service.getSummary('period-1')).resolves.toEqual({
       depositCount: 2,
-      totalDepositedUsdt: 300,
-      averageDepositUsdt: 150,
+      totalDepositedUsdt: new Prisma.Decimal('300'),
+      averageDepositUsdt: new Prisma.Decimal('150'),
     });
   });
 
@@ -89,8 +89,8 @@ describe('PeriodAnalyticsService', () => {
 
     await expect(service.getSummary('period-1')).resolves.toEqual({
       depositCount: 1,
-      totalDepositedUsdt: 120,
-      averageDepositUsdt: 120,
+      totalDepositedUsdt: new Prisma.Decimal('120'),
+      averageDepositUsdt: new Prisma.Decimal('120'),
     });
 
     expect(mockPrisma.deposit.groupBy).toHaveBeenCalledWith(

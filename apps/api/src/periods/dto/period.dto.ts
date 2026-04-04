@@ -8,6 +8,8 @@ import {
   IsNumber,
   IsDefined,
   IsNotEmpty,
+  Min,
+  Max,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -97,26 +99,32 @@ export class UpdatePeriodDto {
 export class PeriodSettlementInputDto {
   @strictNumberTransform()
   @IsNumber()
+  @Min(0)
   ending_balance_usdt: number;
 
   @strictNumberTransform()
   @IsNumber()
   @IsOptional()
+  @Min(0)
+  @Max(100)
   trader_fee_percent?: number;
 
   @strictNumberTransform()
   @IsNumber()
   @IsOptional()
+  @Min(0)
   tron_network_fee_usdt?: number;
 
   @strictNumberTransform()
   @IsNumber()
   @IsOptional()
+  @Min(0)
   ton_network_fee_usdt?: number;
 
   @strictNumberTransform()
   @IsNumber()
   @IsOptional()
+  @Min(0)
   bsc_network_fee_usdt?: number;
 }
 
