@@ -27,7 +27,7 @@ export class AdminDepositsController {
     const deposits = await (this.depositsService as any).prisma.deposit.findMany({
       where,
       include: {
-        investmentPeriod: {
+        investment_period: {
           select: {
             title: true,
             status: true,
@@ -42,8 +42,8 @@ export class AdminDepositsController {
 
     return deposits.map((d: any) => ({
       ...d,
-      investment_period_title: d.investmentPeriod?.title || null,
-      investment_period_status: d.investmentPeriod?.status || null,
+      investment_period_title: d.investment_period?.title || null,
+      investment_period_status: d.investment_period?.status || null,
       requested_amount: d.requested_amount ? parseFloat(d.requested_amount.toString()) : null,
       confirmed_amount: d.confirmed_amount ? parseFloat(d.confirmed_amount.toString()) : null,
       created_at: d.created_at.toISOString(),

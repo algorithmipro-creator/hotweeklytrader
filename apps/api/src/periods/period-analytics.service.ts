@@ -12,13 +12,19 @@ export class PeriodAnalyticsService {
         investment_period_id: periodId,
         status: { not: 'CANCELLED' },
       },
-      _count: { deposit_id: true },
+      _count: {
+        deposit_id: true,
+        confirmed_amount: true,
+      },
       _sum: { confirmed_amount: true },
     });
 
     const depositCount = aggregate._count.deposit_id || 0;
+    const confirmedDepositCount = aggregate._count.confirmed_amount || 0;
     const totalDepositedUsdt = this.toNumber(aggregate._sum.confirmed_amount);
-    const averageDepositUsdt = depositCount === 0 ? 0 : totalDepositedUsdt / depositCount;
+    const averageDepositUsdt = confirmedDepositCount === 0
+      ? 0
+      : totalDepositedUsdt / confirmedDepositCount;
 
     return {
       depositCount,

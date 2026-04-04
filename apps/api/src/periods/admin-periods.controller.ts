@@ -11,11 +11,10 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 @Controller('admin/periods')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AdminPeriodsController {
-  private analyticsService: PeriodAnalyticsService;
-
-  constructor(private periodsService: PeriodsService) {
-    this.analyticsService = new PeriodAnalyticsService((this.periodsService as any).prisma);
-  }
+  constructor(
+    private periodsService: PeriodsService,
+    private analyticsService: PeriodAnalyticsService,
+  ) {}
 
   @Get()
   async findAll(@Query('status') status?: string): Promise<PeriodDto[]> {

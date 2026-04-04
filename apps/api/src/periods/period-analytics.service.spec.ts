@@ -26,7 +26,7 @@ describe('PeriodAnalyticsService', () => {
 
   it('returns deposit count, total, and average for a period', async () => {
     mockPrisma.deposit.aggregate.mockResolvedValue({
-      _count: { deposit_id: 2 },
+      _count: { deposit_id: 2, confirmed_amount: 2 },
       _sum: { confirmed_amount: new Prisma.Decimal('300') },
     });
 
@@ -39,7 +39,7 @@ describe('PeriodAnalyticsService', () => {
 
   it('returns zeros when there are no deposits', async () => {
     mockPrisma.deposit.aggregate.mockResolvedValue({
-      _count: { deposit_id: 0 },
+      _count: { deposit_id: 0, confirmed_amount: 0 },
       _sum: { confirmed_amount: null },
     });
 
@@ -47,6 +47,19 @@ describe('PeriodAnalyticsService', () => {
       depositCount: 0,
       totalDepositedUsdt: 0,
       averageDepositUsdt: 0,
+    });
+  });
+
+  it('does not average in deposits without confirmed amounts', async () => {
+    mockPrisma.deposit.aggregate.mockResolvedValue({
+      _count: { deposit_id: 3, confirmed_amount: 2 },
+      _sum: { confirmed_amount: new Prisma.Decimal('300') },
+    });
+
+    await expect(service.getSummary('period-1')).resolves.toEqual({
+      depositCount: 3,
+      totalDepositedUsdt: 300,
+      averageDepositUsdt: 150,
     });
   });
 });
