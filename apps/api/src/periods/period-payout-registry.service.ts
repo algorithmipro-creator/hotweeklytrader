@@ -138,7 +138,6 @@ export class PeriodPayoutRegistryService {
     const snapshot = period.settlement_snapshot;
     const totalDepositsUsdt = this.decimal(snapshot.total_deposits_usdt);
 
-  const networkFees = this.normalizeFees(snapshot.network_fees_json);
     const networkFeeDecimals = this.toDecimalFees(snapshot.network_fees_json);
     const totalNetworkFees = networkFeeDecimals.TRON.add(networkFeeDecimals.TON).add(networkFeeDecimals.BSC);
     const grossDistributableUsdt = this.decimal(snapshot.net_distributable_usdt).add(totalNetworkFees);
@@ -166,6 +165,24 @@ export class PeriodPayoutRegistryService {
       acc[network] = (acc[network] || ZERO).add(amount);
       return acc;
     }, {} as Record<string, Prisma.Decimal>);
+
+    const liveEligibleTotal = Object.values(networkTotals).reduce(
+      (acc, amount) => acc.add(amount),
+      ZERO,
+    );
+    if (!liveEligibleTotal.equals(totalDepositsUsdt)) {
+      throw new BadRequestException(
+        'Eligible deposits no longer match the approved settlement snapshot. Reapprove settlement or restore the deposit set before generating a payout registry.',
+      );
+    }
+
+    (['TRON', 'TON', 'BSC'] as const).forEach((networkKey) => {
+      if (networkFeeDecimals[networkKey].gt(0) && (networkTotals[networkKey] || ZERO).isZero()) {
+        throw new BadRequestException(
+          `No eligible deposits found for ${networkKey} while the approved settlement snapshot allocates network fees there.`,
+        );
+      }
+    });
 
   const items = deposits.map((deposit: DepositRecord) => {
       const confirmedAmount = this.decimal(deposit.confirmed_amount);
@@ -243,6 +260,7 @@ export class PeriodPayoutRegistryService {
 
   private serialize(registry: PayoutRegistryRecord): PeriodPayoutRegistryDto {
     const snapshot = registry.settlement_snapshot;
+    const networkFees = this.normalizeFees(snapshot?.network_fees_json);
     return {
       payout_registry_id: registry.payout_registry_id,
       investment_period_id: registry.investment_period_id,
@@ -251,7 +269,7 @@ export class PeriodPayoutRegistryService {
       generated_by: registry.generated_by || null,
       totalDepositsUsdt: this.toNumber(snapshot?.total_deposits_usdt),
       netDistributableUsdt: this.toNumber(snapshot?.net_distributable_usdt),
-      networkFeesUsdt: this.normalizeFees(snapshot?.network_fees_json),
+      networkFeesUsdt: networkFees,
       items: registry.items.map((item) => ({
         payout_registry_item_id: item.payout_registry_item_id,
         deposit_id: item.deposit_id,

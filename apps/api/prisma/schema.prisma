@@ -311,6 +311,7 @@ model PeriodPayoutRegistryItem {
   @@index([payout_registry_id])
   @@index([deposit_id])
   @@index([network])
+  @@index([status])
 }
 
 model ProfitLossReport {

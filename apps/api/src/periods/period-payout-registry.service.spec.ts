@@ -233,4 +233,54 @@ describe('PeriodPayoutRegistryService', () => {
       'An approved settlement snapshot is required before generating a payout registry',
     );
   });
+
+  it('rejects registry generation when a network fee bucket has no eligible deposits', async () => {
+    const snapshot = {
+      settlement_snapshot_id: 'snapshot-1',
+      total_deposits_usdt: new Prisma.Decimal('1000'),
+      net_distributable_usdt: new Prisma.Decimal('850'),
+      network_fees_json: { TRON: 10, TON: 20, BSC: 30 },
+      approved_at: new Date('2026-04-04T00:00:00.000Z'),
+    };
+
+    mockPrisma.periodPayoutRegistry.findUnique.mockResolvedValue(null);
+    mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
+      investment_period_id: 'period-1',
+      settlement_snapshot: snapshot,
+    });
+    mockPrisma.deposit.findMany.mockResolvedValue([
+      { deposit_id: 'deposit-1', network: 'TRON', asset_symbol: 'USDT', source_address: 'tron-src-1', confirmed_amount: new Prisma.Decimal('600') },
+      { deposit_id: 'deposit-2', network: 'BSC', asset_symbol: 'USDT', source_address: 'bsc-src-1', confirmed_amount: new Prisma.Decimal('400') },
+    ]);
+
+    await expect(service.generate('period-1', 'admin-1')).rejects.toThrow(
+      'No eligible deposits found for TON while the approved settlement snapshot allocates network fees there.',
+    );
+    expect(mockPrisma.periodPayoutRegistry.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects registry generation when live eligible deposits drift from the approved snapshot total', async () => {
+    const snapshot = {
+      settlement_snapshot_id: 'snapshot-1',
+      total_deposits_usdt: new Prisma.Decimal('1000'),
+      net_distributable_usdt: new Prisma.Decimal('850'),
+      network_fees_json: { TRON: 10, TON: 20, BSC: 30 },
+      approved_at: new Date('2026-04-04T00:00:00.000Z'),
+    };
+
+    mockPrisma.periodPayoutRegistry.findUnique.mockResolvedValue(null);
+    mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
+      investment_period_id: 'period-1',
+      settlement_snapshot: snapshot,
+    });
+    mockPrisma.deposit.findMany.mockResolvedValue([
+      { deposit_id: 'deposit-1', network: 'TRON', asset_symbol: 'USDT', source_address: 'tron-src-1', confirmed_amount: new Prisma.Decimal('500') },
+      { deposit_id: 'deposit-2', network: 'TON', asset_symbol: 'USDT', source_address: 'ton-src-1', confirmed_amount: new Prisma.Decimal('200') },
+    ]);
+
+    await expect(service.generate('period-1', 'admin-1')).rejects.toThrow(
+      'Eligible deposits no longer match the approved settlement snapshot. Reapprove settlement or restore the deposit set before generating a payout registry.',
+    );
+    expect(mockPrisma.periodPayoutRegistry.create).not.toHaveBeenCalled();
+  });
 });

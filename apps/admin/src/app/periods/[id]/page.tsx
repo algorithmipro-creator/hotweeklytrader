@@ -162,6 +162,8 @@ export default function PeriodDetailPage() {
   const [preview, setPreview] = useState<SettlementPreview | null>(null);
   const [lastPreviewInput, setLastPreviewInput] = useState<NormalizedSettlementInput | null>(null);
   const [payoutRegistry, setPayoutRegistry] = useState<PeriodPayoutRegistry | null>(null);
+  const [registryError, setRegistryError] = useState('');
+  const [registryLoading, setRegistryLoading] = useState(true);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [registrySubmitting, setRegistrySubmitting] = useState(false);
@@ -177,10 +179,9 @@ export default function PeriodDetailPage() {
     if (!periodId) return;
 
     setLoading(true);
-    Promise.all([getAdminPeriod(periodId), getPeriodPayoutRegistry(periodId)])
-      .then(([data, registry]) => {
+    getAdminPeriod(periodId)
+      .then((data) => {
         setPeriod(data);
-        setPayoutRegistry(registry);
         const snapshot = data.settlement_snapshot;
         setPreview(snapshot || null);
         setLastPreviewInput(null);
@@ -195,6 +196,30 @@ export default function PeriodDetailPage() {
       })
       .catch((err) => setError(err.response?.data?.message || 'Failed to load period'))
       .finally(() => setLoading(false));
+  }, [periodId]);
+
+  useEffect(() => {
+    if (!periodId) return;
+
+    let cancelled = false;
+    setRegistryLoading(true);
+    setRegistryError('');
+    getPeriodPayoutRegistry(periodId)
+      .then((data) => {
+        if (!cancelled) setPayoutRegistry(data);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setPayoutRegistry(null);
+        setRegistryError(err.response?.data?.message || 'Failed to load payout registry');
+      })
+      .finally(() => {
+        if (!cancelled) setRegistryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [periodId]);
 
   const canSettle = period?.status === 'REPORTING';
@@ -272,9 +297,10 @@ export default function PeriodDetailPage() {
     try {
       const data = await generatePeriodPayoutRegistry(periodId);
       setPayoutRegistry(data);
+      setRegistryError('');
       setError('');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to generate payout registry');
+      setRegistryError(err.response?.data?.message || 'Failed to generate payout registry');
     } finally {
       setRegistrySubmitting(false);
     }
@@ -363,7 +389,11 @@ export default function PeriodDetailPage() {
           </div>
         )}
 
-        {payoutRegistry ? (
+        {registryLoading ? (
+          <div className="text-text-secondary text-sm">Loading payout registry...</div>
+        ) : registryError ? (
+          <div className="text-warning text-sm">{registryError}</div>
+        ) : payoutRegistry ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
               <div>Registry generated: {new Date(payoutRegistry.generated_at).toLocaleString()}</div>
