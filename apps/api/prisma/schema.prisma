@@ -205,6 +205,7 @@ model InvestmentPeriod {
 
   deposits               Deposit[]
   settlement_snapshot    PeriodSettlementSnapshot?
+  payout_registry        PeriodPayoutRegistry?
 }
 
 model Deposit {
@@ -258,9 +259,47 @@ model PeriodSettlementSnapshot {
   approved_by             String?
 
   investment_period       InvestmentPeriod @relation(fields: [investment_period_id], references: [investment_period_id], onDelete: Cascade)
+  payout_registry         PeriodPayoutRegistry?
 
   @@index([investment_period_id])
   @@index([approved_at])
+}
+
+model PeriodPayoutRegistry {
+  payout_registry_id     String    @id @default(uuid())
+  investment_period_id   String    @unique
+  settlement_snapshot_id String    @unique
+  generated_at           DateTime  @default(now())
+  generated_by           String?
+
+  investment_period      InvestmentPeriod        @relation(fields: [investment_period_id], references: [investment_period_id], onDelete: Cascade)
+  settlement_snapshot    PeriodSettlementSnapshot @relation(fields: [settlement_snapshot_id], references: [settlement_snapshot_id], onDelete: Cascade)
+  items                  PeriodPayoutRegistryItem[]
+
+  @@index([investment_period_id])
+  @@index([settlement_snapshot_id])
+  @@index([generated_at])
+}
+
+model PeriodPayoutRegistryItem {
+  payout_registry_item_id   String   @id @default(uuid())
+  payout_registry_id        String
+  deposit_id                String
+  network                   String
+  asset_symbol              String
+  confirmed_amount_usdt     Decimal
+  network_fee_bucket_usdt   Decimal
+  network_fee_allocation_usdt Decimal
+  payout_amount_usdt        Decimal
+  created_at                DateTime @default(now())
+
+  payout_registry           PeriodPayoutRegistry @relation(fields: [payout_registry_id], references: [payout_registry_id], onDelete: Cascade)
+  deposit                   Deposit              @relation(fields: [deposit_id], references: [deposit_id], onDelete: Cascade)
+
+  @@unique([payout_registry_id, deposit_id])
+  @@index([payout_registry_id])
+  @@index([deposit_id])
+  @@index([network])
 }
 
 model ProfitLossReport {

@@ -5,6 +5,7 @@ import { AdminPeriodsController } from './admin-periods.controller';
 import { PeriodsService } from './periods.service';
 import { PeriodAnalyticsService } from './period-analytics.service';
 import { PeriodSettlementService } from './period-settlement.service';
+import { PeriodPayoutRegistryService } from './period-payout-registry.service';
 import { ApprovePeriodSettlementDto } from './dto/period.dto';
 
 describe('AdminPeriodsController', () => {
@@ -29,6 +30,11 @@ describe('AdminPeriodsController', () => {
     approve: jest.fn(),
   };
 
+  const mockPayoutRegistryService = {
+    getRegistry: jest.fn(),
+    generate: jest.fn(),
+  };
+
   beforeEach(async () => {
     mockSettlementService.getSnapshot.mockResolvedValue(null);
     const module = await Test.createTestingModule({
@@ -37,6 +43,7 @@ describe('AdminPeriodsController', () => {
         { provide: PeriodsService, useValue: mockPeriodsService },
         { provide: PeriodAnalyticsService, useValue: mockAnalyticsService },
         { provide: PeriodSettlementService, useValue: mockSettlementService },
+        { provide: PeriodPayoutRegistryService, useValue: mockPayoutRegistryService },
       ],
     }).compile();
 
@@ -165,5 +172,57 @@ describe('AdminPeriodsController', () => {
     });
     const errors = validateSync(dto);
     expect(errors.map((error) => error.property)).toContain('preview_signature');
+  });
+
+  it('proxies payout registry generation and fetching with the current user', async () => {
+    mockPayoutRegistryService.getRegistry.mockResolvedValue({
+      payout_registry_id: 'registry-1',
+      investment_period_id: 'period-1',
+      settlement_snapshot_id: 'snapshot-1',
+      generated_at: '2026-04-04T00:00:00.000Z',
+      generated_by: 'admin-1',
+      totalDepositsUsdt: 1000,
+      netDistributableUsdt: 850,
+      networkFeesUsdt: { TRON: 10, TON: 20, BSC: 30 },
+      items: [],
+    });
+    mockPayoutRegistryService.generate.mockResolvedValue({
+      payout_registry_id: 'registry-1',
+      investment_period_id: 'period-1',
+      settlement_snapshot_id: 'snapshot-1',
+      generated_at: '2026-04-04T00:00:00.000Z',
+      generated_by: 'admin-1',
+      totalDepositsUsdt: 1000,
+      netDistributableUsdt: 850,
+      networkFeesUsdt: { TRON: 10, TON: 20, BSC: 30 },
+      items: [],
+    });
+
+    await expect(controller.getPayoutRegistry('period-1')).resolves.toEqual({
+      payout_registry_id: 'registry-1',
+      investment_period_id: 'period-1',
+      settlement_snapshot_id: 'snapshot-1',
+      generated_at: '2026-04-04T00:00:00.000Z',
+      generated_by: 'admin-1',
+      totalDepositsUsdt: 1000,
+      netDistributableUsdt: 850,
+      networkFeesUsdt: { TRON: 10, TON: 20, BSC: 30 },
+      items: [],
+    });
+
+    await expect(controller.generatePayoutRegistry('period-1', { user_id: 'admin-1' })).resolves.toEqual({
+      payout_registry_id: 'registry-1',
+      investment_period_id: 'period-1',
+      settlement_snapshot_id: 'snapshot-1',
+      generated_at: '2026-04-04T00:00:00.000Z',
+      generated_by: 'admin-1',
+      totalDepositsUsdt: 1000,
+      netDistributableUsdt: 850,
+      networkFeesUsdt: { TRON: 10, TON: 20, BSC: 30 },
+      items: [],
+    });
+
+    expect(mockPayoutRegistryService.getRegistry).toHaveBeenCalledWith('period-1');
+    expect(mockPayoutRegistryService.generate).toHaveBeenCalledWith('period-1', 'admin-1');
   });
 });

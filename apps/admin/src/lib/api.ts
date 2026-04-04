@@ -89,6 +89,16 @@ export async function approvePeriodSettlement(
   return response.data;
 }
 
+export async function getPeriodPayoutRegistry(id: string) {
+  const response = await api.get(`/admin/periods/${id}/payout-registry`);
+  return response.data;
+}
+
+export async function generatePeriodPayoutRegistry(id: string) {
+  const response = await api.post(`/admin/periods/${id}/payout-registry/generate`);
+  return response.data;
+}
+
 export async function getAdminDeposits(params?: { status?: string; network?: string; investment_period_id?: string; limit?: number; offset?: number }) {
   const response = await api.get('/admin/deposits', { params });
   return response.data;

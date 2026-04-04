@@ -3,7 +3,13 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { approvePeriodSettlement, getAdminPeriod, previewPeriodSettlement } from '../../../lib/api';
+import {
+  approvePeriodSettlement,
+  generatePeriodPayoutRegistry,
+  getAdminPeriod,
+  getPeriodPayoutRegistry,
+  previewPeriodSettlement,
+} from '../../../lib/api';
 import { StatusBadge } from '../../../components/status-badge';
 
 type SettlementPreview = {
@@ -43,6 +49,34 @@ type NormalizedSettlementInput = {
 };
 
 type SettlementApprovalPayload = NormalizedSettlementInput & { preview_signature: string };
+
+type PeriodPayoutRegistryItem = {
+  payout_registry_item_id: string;
+  deposit_id: string;
+  network: string;
+  asset_symbol: string;
+  confirmed_amount_usdt: number;
+  network_fee_bucket_usdt: number;
+  network_fee_allocation_usdt: number;
+  payout_amount_usdt: number;
+  created_at: string;
+};
+
+type PeriodPayoutRegistry = {
+  payout_registry_id: string;
+  investment_period_id: string;
+  settlement_snapshot_id: string;
+  generated_at: string;
+  generated_by: string | null;
+  totalDepositsUsdt: number;
+  netDistributableUsdt: number;
+  networkFeesUsdt: {
+    TRON: number;
+    TON: number;
+    BSC: number;
+  };
+  items: PeriodPayoutRegistryItem[];
+};
 
 const money = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,
@@ -116,8 +150,10 @@ export default function PeriodDetailPage() {
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState<SettlementPreview | null>(null);
   const [lastPreviewInput, setLastPreviewInput] = useState<NormalizedSettlementInput | null>(null);
+  const [payoutRegistry, setPayoutRegistry] = useState<PeriodPayoutRegistry | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [registrySubmitting, setRegistrySubmitting] = useState(false);
   const [form, setForm] = useState<SettlementForm>({
     ending_balance_usdt: '',
     trader_fee_percent: '40',
@@ -130,9 +166,10 @@ export default function PeriodDetailPage() {
     if (!periodId) return;
 
     setLoading(true);
-    getAdminPeriod(periodId)
-      .then((data) => {
+    Promise.all([getAdminPeriod(periodId), getPeriodPayoutRegistry(periodId)])
+      .then(([data, registry]) => {
         setPeriod(data);
+        setPayoutRegistry(registry);
         const snapshot = data.settlement_snapshot;
         setPreview(snapshot || null);
         setLastPreviewInput(null);
@@ -156,6 +193,7 @@ export default function PeriodDetailPage() {
   const canPreview = canSettle && normalized.valid && !submitting;
   const canApprove = canPreview && Boolean(preview?.preview_signature) && previewMatchesForm && !hasApprovedSnapshot;
   const previewStale = Boolean(preview) && !previewMatchesForm && !hasApprovedSnapshot;
+  const canGenerateRegistry = Boolean(period?.settlement_snapshot?.approved_at) && !registrySubmitting;
 
   const runPreview = async () => {
     if (!periodId) return;
@@ -210,6 +248,24 @@ export default function PeriodDetailPage() {
       setError(err.response?.data?.message || 'Failed to approve settlement');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const runGenerateRegistry = async () => {
+    if (!periodId) return;
+    if (!period?.settlement_snapshot?.approved_at) {
+      setError('Approve the settlement snapshot before generating a payout registry.');
+      return;
+    }
+    setRegistrySubmitting(true);
+    try {
+      const data = await generatePeriodPayoutRegistry(periodId);
+      setPayoutRegistry(data);
+      setError('');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to generate payout registry');
+    } finally {
+      setRegistrySubmitting(false);
     }
   };
 
@@ -272,6 +328,76 @@ export default function PeriodDetailPage() {
           </div>
         </div>
       )}
+
+      <div className="bg-bg-secondary rounded-lg p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">Payout Registry</h2>
+            <p className="text-sm text-text-secondary">
+              Generate the registry from the approved settlement snapshot and review the per-deposit payout allocation.
+            </p>
+          </div>
+          <button
+            onClick={runGenerateRegistry}
+            disabled={!canGenerateRegistry}
+            className="px-4 py-2 rounded-lg bg-primary text-white text-sm disabled:opacity-50"
+          >
+            {registrySubmitting ? 'Working...' : payoutRegistry ? 'Refresh registry' : 'Generate registry'}
+          </button>
+        </div>
+
+        {!period?.settlement_snapshot?.approved_at && (
+          <div className="text-warning text-xs">
+            Approve the settlement snapshot before generating a payout registry.
+          </div>
+        )}
+
+        {payoutRegistry ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+              <div>Registry generated: {new Date(payoutRegistry.generated_at).toLocaleString()}</div>
+              <div>Generated by: {payoutRegistry.generated_by || 'system'}</div>
+              <div>Items: {payoutRegistry.items.length}</div>
+              <div>Total deposits: {money.format(payoutRegistry.totalDepositsUsdt)}</div>
+              <div>Net distributable: {money.format(payoutRegistry.netDistributableUsdt)}</div>
+              <div>
+                Network fees: {money.format(payoutRegistry.networkFeesUsdt.TRON + payoutRegistry.networkFeesUsdt.TON + payoutRegistry.networkFeesUsdt.BSC)}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-text-secondary">
+                  <tr>
+                    <th className="text-left py-2 pr-3">Deposit</th>
+                    <th className="text-left py-2 pr-3">Network</th>
+                    <th className="text-right py-2 pr-3">Confirmed USDT</th>
+                    <th className="text-right py-2 pr-3">Fee bucket</th>
+                    <th className="text-right py-2 pr-3">Fee allocation</th>
+                    <th className="text-right py-2 pr-3">Payout amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payoutRegistry.items.map((item) => (
+                    <tr key={item.payout_registry_item_id} className="border-t border-gray-700">
+                      <td className="py-2 pr-3 text-text-secondary">{item.deposit_id}</td>
+                      <td className="py-2 pr-3 text-text-secondary">{item.network}</td>
+                      <td className="py-2 pr-3 text-right">{money.format(item.confirmed_amount_usdt)}</td>
+                      <td className="py-2 pr-3 text-right">{money.format(item.network_fee_bucket_usdt)}</td>
+                      <td className="py-2 pr-3 text-right">{money.format(item.network_fee_allocation_usdt)}</td>
+                      <td className="py-2 pr-3 text-right font-medium">{money.format(item.payout_amount_usdt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="text-text-secondary text-sm">
+            No payout registry has been generated yet.
+          </div>
+        )}
+      </div>
 
       <div className="bg-bg-secondary rounded-lg p-4 space-y-4">
         <div className="flex items-center justify-between gap-3">

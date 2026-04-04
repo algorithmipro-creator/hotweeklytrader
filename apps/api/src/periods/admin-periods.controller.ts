@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { PeriodsService } from './periods.service';
 import { PeriodAnalyticsService } from './period-analytics.service';
 import { PeriodSettlementService } from './period-settlement.service';
+import { PeriodPayoutRegistryService } from './period-payout-registry.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import {
@@ -26,6 +27,7 @@ export class AdminPeriodsController {
     private periodsService: PeriodsService,
     private analyticsService: PeriodAnalyticsService,
     private settlementService: PeriodSettlementService,
+    private payoutRegistryService: PeriodPayoutRegistryService,
   ) {}
 
   @Get()
@@ -67,6 +69,19 @@ export class AdminPeriodsController {
     @CurrentUser() user: any,
   ): Promise<PeriodSettlementSnapshotDto> {
     return this.settlementService.approve(id, dto, user.user_id);
+  }
+
+  @Get(':id/payout-registry')
+  async getPayoutRegistry(@Param('id') id: string) {
+    return this.payoutRegistryService.getRegistry(id);
+  }
+
+  @Post(':id/payout-registry/generate')
+  async generatePayoutRegistry(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.payoutRegistryService.generate(id, user.user_id);
   }
 
   @Post()
