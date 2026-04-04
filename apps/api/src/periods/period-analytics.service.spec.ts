@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { PeriodAnalyticsService } from './period-analytics.service';
+import { CONFIRMED_USDT_DEPOSIT_STATUSES, PeriodAnalyticsService } from './period-analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -38,6 +38,17 @@ describe('PeriodAnalyticsService', () => {
       totalDepositedUsdt: 300,
       averageDepositUsdt: 150,
     });
+
+    expect(mockPrisma.deposit.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          investment_period_id: { in: ['period-1'] },
+          status: { in: CONFIRMED_USDT_DEPOSIT_STATUSES },
+          asset_symbol: 'USDT',
+          confirmed_amount: { not: null },
+        }),
+      }),
+    );
   });
 
   it('returns zeros when there are no deposits', async () => {
