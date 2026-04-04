@@ -27,6 +27,7 @@ describe('AdminPeriodsController', () => {
   };
 
   beforeEach(async () => {
+    mockSettlementService.getSnapshot.mockResolvedValue(null);
     const module = await Test.createTestingModule({
       controllers: [AdminPeriodsController],
       providers: [
@@ -73,6 +74,7 @@ describe('AdminPeriodsController', () => {
       depositCount: 2,
       totalDepositedUsdt: 300,
       averageDepositUsdt: 150,
+      settlement_snapshot: null,
     });
   });
 });

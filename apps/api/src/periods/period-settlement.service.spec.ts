@@ -13,7 +13,7 @@ describe('PeriodSettlementService', () => {
     },
     periodSettlementSnapshot: {
       findUnique: jest.fn(),
-      create: jest.fn(),
+      upsert: jest.fn(),
     },
   };
 
@@ -75,7 +75,7 @@ describe('PeriodSettlementService', () => {
       averageDepositUsdt: 500,
     });
     mockPrisma.periodSettlementSnapshot.findUnique.mockResolvedValue(null);
-    mockPrisma.periodSettlementSnapshot.create.mockResolvedValue({
+    mockPrisma.periodSettlementSnapshot.upsert.mockResolvedValue({
       settlement_snapshot_id: 'snapshot-1',
       investment_period_id: 'period-1',
       ending_balance_usdt: new Prisma.Decimal('1300'),
@@ -117,9 +117,9 @@ describe('PeriodSettlementService', () => {
       approved_by: 'admin-1',
     });
 
-    expect(mockPrisma.periodSettlementSnapshot.create).toHaveBeenCalledWith(
+    expect(mockPrisma.periodSettlementSnapshot.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
+        create: expect.objectContaining({
           investment_period_id: 'period-1',
           trader_fee_percent: 25,
           approved_by: 'admin-1',
@@ -164,49 +164,86 @@ describe('PeriodSettlementService', () => {
       approved_by: 'admin-1',
     });
 
-    expect(mockPrisma.periodSettlementSnapshot.create).not.toHaveBeenCalled();
+    expect(mockPrisma.periodSettlementSnapshot.upsert).not.toHaveBeenCalled();
   });
 
-  it('recovers from a concurrent approve race on snapshot creation', async () => {
+  it('uses decimal-safe math for fractional settlement values', async () => {
     mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
       investment_period_id: 'period-1',
       status: 'REPORTING',
     });
     mockAnalytics.getSummary.mockResolvedValue({
       depositCount: 2,
-      totalDepositedUsdt: 1000,
-      averageDepositUsdt: 500,
+      totalDepositedUsdt: 0.1,
+      averageDepositUsdt: 0.05,
     });
-    mockPrisma.periodSettlementSnapshot.findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        settlement_snapshot_id: 'snapshot-2',
-        investment_period_id: 'period-1',
-        ending_balance_usdt: new Prisma.Decimal('1300'),
-        total_deposits_usdt: new Prisma.Decimal('1000'),
-        gross_pnl_usdt: new Prisma.Decimal('300'),
-        trader_fee_percent: 25,
-        trader_fee_usdt: new Prisma.Decimal('75'),
-        network_fees_json: { TRON: 10, TON: 5, BSC: 15 },
-        net_distributable_usdt: new Prisma.Decimal('1210'),
-        calculated_at: new Date('2026-04-04T00:00:00.000Z'),
-        approved_at: new Date('2026-04-04T00:00:00.000Z'),
-        approved_by: 'admin-1',
-      });
-    mockPrisma.periodSettlementSnapshot.create.mockRejectedValue({
-      code: 'P2002',
+    mockPrisma.periodSettlementSnapshot.findUnique.mockResolvedValue(null);
+    mockPrisma.periodSettlementSnapshot.upsert.mockResolvedValue({
+      settlement_snapshot_id: 'snapshot-2',
+      investment_period_id: 'period-1',
+      ending_balance_usdt: new Prisma.Decimal('0.3'),
+      total_deposits_usdt: new Prisma.Decimal('0.1'),
+      gross_pnl_usdt: new Prisma.Decimal('0.2'),
+      trader_fee_percent: 40,
+      trader_fee_usdt: new Prisma.Decimal('0.08'),
+      network_fees_json: { TRON: 0, TON: 0, BSC: 0 },
+      net_distributable_usdt: new Prisma.Decimal('0.22'),
+      calculated_at: new Date('2026-04-04T00:00:00.000Z'),
+      approved_at: new Date('2026-04-04T00:00:00.000Z'),
+      approved_by: 'admin-1',
     });
 
     await expect(
       service.approve('period-1', {
-        ending_balance_usdt: 1300,
-        trader_fee_percent: 25,
+        ending_balance_usdt: 0.3,
+        tron_network_fee_usdt: 0,
+        ton_network_fee_usdt: 0,
+        bsc_network_fee_usdt: 0,
       }, 'admin-1'),
-    ).resolves.toMatchObject({
+    ).resolves.toEqual({
       settlement_snapshot_id: 'snapshot-2',
+      investment_period_id: 'period-1',
+      totalDepositsUsdt: 0.1,
+      endingBalanceUsdt: 0.3,
+      grossPnlUsdt: 0.2,
+      traderFeePercent: 40,
+      traderFeeUsdt: 0.08,
+      netDistributableUsdt: 0.22,
+      networkFeesUsdt: { TRON: 0, TON: 0, BSC: 0 },
+      calculated_at: '2026-04-04T00:00:00.000Z',
+      approved_at: '2026-04-04T00:00:00.000Z',
       approved_by: 'admin-1',
     });
 
-    expect(mockPrisma.periodSettlementSnapshot.create).toHaveBeenCalled();
+    expect(mockPrisma.periodSettlementSnapshot.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          ending_balance_usdt: 0.3,
+          total_deposits_usdt: 0.1,
+          gross_pnl_usdt: 0.2,
+          trader_fee_usdt: 0.08,
+          net_distributable_usdt: 0.22,
+        }),
+      }),
+    );
+  });
+
+  it('rejects invalid optional fee inputs instead of silently defaulting', async () => {
+    mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
+      investment_period_id: 'period-1',
+      status: 'REPORTING',
+    });
+    mockAnalytics.getSummary.mockResolvedValue({
+      depositCount: 1,
+      totalDepositedUsdt: 100,
+      averageDepositUsdt: 100,
+    });
+
+    await expect(
+      service.preview('period-1', {
+        ending_balance_usdt: 150,
+        tron_network_fee_usdt: NaN as any,
+      }),
+    ).rejects.toThrow('tron_network_fee_usdt must be a valid number');
   });
 });

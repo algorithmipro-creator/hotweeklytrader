@@ -47,37 +47,25 @@ export class PeriodSettlementService {
     const preview = await this.buildPreview(periodId, dto);
     const now = new Date();
 
-    try {
-      const snapshot = await this.prisma.periodSettlementSnapshot.create({
-        data: {
-          investment_period_id: periodId,
-          ending_balance_usdt: new Prisma.Decimal(preview.endingBalanceUsdt),
-          total_deposits_usdt: new Prisma.Decimal(preview.totalDepositsUsdt),
-          gross_pnl_usdt: new Prisma.Decimal(preview.grossPnlUsdt),
-          trader_fee_percent: preview.traderFeePercent,
-          trader_fee_usdt: new Prisma.Decimal(preview.traderFeeUsdt),
-          network_fees_json: preview.networkFeesUsdt,
-          net_distributable_usdt: new Prisma.Decimal(preview.netDistributableUsdt),
-          calculated_at: now,
-          approved_at: now,
-          approved_by: approvedBy || null,
-        },
-      });
+    const snapshot = await this.prisma.periodSettlementSnapshot.upsert({
+      where: { investment_period_id: periodId },
+      create: {
+        investment_period_id: periodId,
+        ending_balance_usdt: preview.endingBalanceUsdt,
+        total_deposits_usdt: preview.totalDepositsUsdt,
+        gross_pnl_usdt: preview.grossPnlUsdt,
+        trader_fee_percent: preview.traderFeePercent,
+        trader_fee_usdt: preview.traderFeeUsdt,
+        network_fees_json: preview.networkFeesUsdt,
+        net_distributable_usdt: preview.netDistributableUsdt,
+        calculated_at: now,
+        approved_at: now,
+        approved_by: approvedBy || null,
+      },
+      update: {},
+    });
 
-      return this.serializeSnapshot(periodId, snapshot);
-    } catch (error: any) {
-      if (error?.code === 'P2002') {
-        const snapshot = await this.prisma.periodSettlementSnapshot.findUnique({
-          where: { investment_period_id: periodId },
-        });
-
-        if (snapshot) {
-          return this.serializeSnapshot(periodId, snapshot);
-        }
-      }
-
-      throw error;
-    }
+    return this.serializeSnapshot(periodId, snapshot);
   }
 
   private async buildPreview(
@@ -85,26 +73,32 @@ export class PeriodSettlementService {
     dto: PeriodSettlementInputDto,
   ): Promise<PeriodSettlementPreviewDto> {
     const summary = await this.analyticsService.getSummary(periodId);
-    const traderFeePercent = dto.trader_fee_percent ?? DEFAULT_TRADER_FEE_PERCENT;
-    const endingBalanceUsdt = dto.ending_balance_usdt;
+    const endingBalanceUsdt = this.requiredDecimal(dto.ending_balance_usdt, 'ending_balance_usdt');
+    const totalDepositsUsdt = this.requiredDecimal(summary.totalDepositedUsdt, 'totalDepositedUsdt');
+    const traderFeePercent = this.optionalPercent(dto.trader_fee_percent, DEFAULT_TRADER_FEE_PERCENT);
+    const tronFee = this.optionalDecimal(dto.tron_network_fee_usdt, 'tron_network_fee_usdt');
+    const tonFee = this.optionalDecimal(dto.ton_network_fee_usdt, 'ton_network_fee_usdt');
+    const bscFee = this.optionalDecimal(dto.bsc_network_fee_usdt, 'bsc_network_fee_usdt');
     const networkFeesUsdt = {
-      TRON: dto.tron_network_fee_usdt ?? 0,
-      TON: dto.ton_network_fee_usdt ?? 0,
-      BSC: dto.bsc_network_fee_usdt ?? 0,
+      TRON: this.toNumber(tronFee),
+      TON: this.toNumber(tonFee),
+      BSC: this.toNumber(bscFee),
     };
-    const totalNetworkFeesUsdt = networkFeesUsdt.TRON + networkFeesUsdt.TON + networkFeesUsdt.BSC;
-    const grossPnlUsdt = endingBalanceUsdt - summary.totalDepositedUsdt;
-    const traderFeeUsdt = grossPnlUsdt > 0 ? (grossPnlUsdt * traderFeePercent) / 100 : 0;
-    const netDistributableUsdt = endingBalanceUsdt - traderFeeUsdt - totalNetworkFeesUsdt;
+    const totalNetworkFees = tronFee.add(tonFee).add(bscFee);
+    const grossPnlUsdt = endingBalanceUsdt.sub(totalDepositsUsdt);
+    const traderFeeUsdt = grossPnlUsdt.gt(0)
+      ? grossPnlUsdt.mul(new Prisma.Decimal(traderFeePercent)).div(100)
+      : new Prisma.Decimal(0);
+    const netDistributableUsdt = endingBalanceUsdt.sub(traderFeeUsdt).sub(totalNetworkFees);
 
     return {
       investment_period_id: periodId,
-      totalDepositsUsdt: summary.totalDepositedUsdt,
-      endingBalanceUsdt,
-      grossPnlUsdt,
+      totalDepositsUsdt: this.toNumber(totalDepositsUsdt),
+      endingBalanceUsdt: this.toNumber(endingBalanceUsdt),
+      grossPnlUsdt: this.toNumber(grossPnlUsdt),
       traderFeePercent,
-      traderFeeUsdt,
-      netDistributableUsdt,
+      traderFeeUsdt: this.toNumber(traderFeeUsdt),
+      netDistributableUsdt: this.toNumber(netDistributableUsdt),
       networkFeesUsdt,
     };
   }
@@ -153,6 +147,29 @@ export class PeriodSettlementService {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') return Number(value) || 0;
     return 0;
+  }
+
+  private optionalPercent(value: number | undefined, fallback: number): number {
+    if (value == null) return fallback;
+    if (!Number.isFinite(value)) {
+      throw new BadRequestException('trader_fee_percent must be a valid number');
+    }
+    return value;
+  }
+
+  private optionalDecimal(value: number | undefined, fieldName: string): Prisma.Decimal {
+    if (value == null) return new Prisma.Decimal(0);
+    if (!Number.isFinite(value)) {
+      throw new BadRequestException(`${fieldName} must be a valid number`);
+    }
+    return new Prisma.Decimal(value);
+  }
+
+  private requiredDecimal(value: number | undefined, fieldName: string): Prisma.Decimal {
+    if (value == null || !Number.isFinite(value)) {
+      throw new BadRequestException(`${fieldName} must be a valid number`);
+    }
+    return new Prisma.Decimal(value);
   }
 
   private toNumber(value: Prisma.Decimal | number | null | undefined): number {
