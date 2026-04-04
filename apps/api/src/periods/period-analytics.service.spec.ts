@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { PeriodAnalyticsService } from './period-analytics.service';
+import { COUNTABLE_CONFIRMED_USDT_STATUSES, PeriodAnalyticsService } from './period-analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -46,6 +46,7 @@ describe('PeriodAnalyticsService', () => {
           asset_symbol: 'USDT',
           confirmed_amount: { not: null },
           confirmed_at: { not: null },
+          status: { in: COUNTABLE_CONFIRMED_USDT_STATUSES },
         }),
       }),
     );
@@ -97,8 +98,28 @@ describe('PeriodAnalyticsService', () => {
         where: expect.objectContaining({
           asset_symbol: 'USDT',
           confirmed_at: { not: null },
+          status: { in: COUNTABLE_CONFIRMED_USDT_STATUSES },
         }),
       }),
     );
+  });
+
+  it('excludes rejected or cancelled deposits from period summaries', async () => {
+    mockPrisma.deposit.groupBy.mockResolvedValue([]);
+
+    await service.getSummary('period-1');
+
+    const [args] = mockPrisma.deposit.groupBy.mock.calls[0];
+    expect(args.where).toEqual(
+      expect.objectContaining({
+        investment_period_id: { in: ['period-1'] },
+        asset_symbol: 'USDT',
+        confirmed_amount: { not: null },
+        confirmed_at: { not: null },
+        status: { in: COUNTABLE_CONFIRMED_USDT_STATUSES },
+      }),
+    );
+    expect(args.where.status.in).not.toContain('REJECTED');
+    expect(args.where.status.in).not.toContain('CANCELLED');
   });
 });
