@@ -7,6 +7,7 @@ import {
   IsEnum,
   IsNumber,
   IsDefined,
+  IsNotEmpty,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -121,6 +122,7 @@ export class PeriodSettlementInputDto {
 
 export class ApprovePeriodSettlementDto extends PeriodSettlementInputDto {
   @IsString()
+  @IsNotEmpty()
   @IsDefined()
   preview_signature: string;
 }

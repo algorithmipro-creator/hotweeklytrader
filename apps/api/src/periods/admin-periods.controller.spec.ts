@@ -1,8 +1,11 @@
 import { Test } from '@nestjs/testing';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { AdminPeriodsController } from './admin-periods.controller';
 import { PeriodsService } from './periods.service';
 import { PeriodAnalyticsService } from './period-analytics.service';
 import { PeriodSettlementService } from './period-settlement.service';
+import { ApprovePeriodSettlementDto } from './dto/period.dto';
 
 describe('AdminPeriodsController', () => {
   let controller: AdminPeriodsController;
@@ -154,5 +157,14 @@ describe('AdminPeriodsController', () => {
       trader_fee_percent: 40,
       preview_signature: 'sig-1',
     }), 'admin-1');
+  });
+
+  it('requires a preview signature on approve payloads', async () => {
+    const dto = plainToInstance(ApprovePeriodSettlementDto, {
+      ending_balance_usdt: 350,
+      trader_fee_percent: 40,
+    });
+    const errors = validateSync(dto);
+    expect(errors.map((error) => error.property)).toContain('preview_signature');
   });
 });

@@ -74,7 +74,17 @@ export async function previewPeriodSettlement(id: string, data: any) {
   return response.data;
 }
 
-export async function approvePeriodSettlement(id: string, data: any) {
+export async function approvePeriodSettlement(
+  id: string,
+  data: {
+    ending_balance_usdt: number;
+    trader_fee_percent?: number;
+    tron_network_fee_usdt?: number;
+    ton_network_fee_usdt?: number;
+    bsc_network_fee_usdt?: number;
+    preview_signature: string;
+  },
+) {
   const response = await api.post(`/admin/periods/${id}/settlement/approve`, data);
   return response.data;
 }

@@ -42,6 +42,8 @@ type NormalizedSettlementInput = {
   bsc_network_fee_usdt: number;
 };
 
+type SettlementApprovalPayload = NormalizedSettlementInput & { preview_signature: string };
+
 const money = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -95,6 +97,17 @@ function normalizeSettlementInput(form: SettlementForm): { valid: boolean; value
   };
 }
 
+function sameSettlementInput(a: NormalizedSettlementInput | null, b: NormalizedSettlementInput): boolean {
+  if (!a) return false;
+  return (
+    a.ending_balance_usdt === b.ending_balance_usdt
+    && a.trader_fee_percent === b.trader_fee_percent
+    && a.tron_network_fee_usdt === b.tron_network_fee_usdt
+    && a.ton_network_fee_usdt === b.ton_network_fee_usdt
+    && a.bsc_network_fee_usdt === b.bsc_network_fee_usdt
+  );
+}
+
 export default function PeriodDetailPage() {
   const params = useParams<{ id: string }>();
   const periodId = Array.isArray(params?.id) ? params.id[0] : params?.id;
@@ -102,7 +115,7 @@ export default function PeriodDetailPage() {
   const [period, setPeriod] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState<SettlementPreview | null>(null);
-  const [previewSignature, setPreviewSignature] = useState<string | null>(null);
+  const [lastPreviewInput, setLastPreviewInput] = useState<NormalizedSettlementInput | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<SettlementForm>({
@@ -122,7 +135,7 @@ export default function PeriodDetailPage() {
         setPeriod(data);
         const snapshot = data.settlement_snapshot;
         setPreview(snapshot || null);
-        setPreviewSignature(snapshot ? 'approved-snapshot' : null);
+        setLastPreviewInput(null);
         setForm({
           ending_balance_usdt: snapshot?.endingBalanceUsdt?.toString?.() || '',
           trader_fee_percent: snapshot?.traderFeePercent?.toString?.() || '40',
@@ -139,9 +152,9 @@ export default function PeriodDetailPage() {
   const canSettle = period?.status === 'REPORTING';
   const hasApprovedSnapshot = Boolean(period?.settlement_snapshot?.approved_at);
   const normalized = useMemo(() => normalizeSettlementInput(form), [form]);
-  const previewMatchesForm = previewSignature === normalized.signature;
+  const previewMatchesForm = sameSettlementInput(lastPreviewInput, normalized.value);
   const canPreview = canSettle && normalized.valid && !submitting;
-  const canApprove = canPreview && preview && previewMatchesForm && !hasApprovedSnapshot;
+  const canApprove = canPreview && Boolean(preview?.preview_signature) && previewMatchesForm && !hasApprovedSnapshot;
   const previewStale = Boolean(preview) && !previewMatchesForm && !hasApprovedSnapshot;
 
   const runPreview = async () => {
@@ -154,7 +167,7 @@ export default function PeriodDetailPage() {
     try {
       const data = await previewPeriodSettlement(periodId, normalized.value);
       setPreview(data);
-      setPreviewSignature(data.preview_signature || normalized.signature);
+      setLastPreviewInput(normalized.value);
       setError('');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to preview settlement');
@@ -173,15 +186,23 @@ export default function PeriodDetailPage() {
       setError('Preview the current inputs again before approving settlement.');
       return;
     }
+    if (!preview.preview_signature) {
+      setError('Preview response is missing a signature. Preview again before approving.');
+      return;
+    }
     if (hasApprovedSnapshot) {
       setError('This period already has an approved settlement snapshot.');
       return;
     }
     setSubmitting(true);
     try {
-      const data = await approvePeriodSettlement(periodId, normalized.value);
+      const approvalPayload: SettlementApprovalPayload = {
+        ...normalized.value,
+        preview_signature: preview.preview_signature,
+      };
+      const data = await approvePeriodSettlement(periodId, approvalPayload);
       setPreview(data);
-      setPreviewSignature(data.preview_signature || normalized.signature);
+      setLastPreviewInput(null);
       const refreshed = await getAdminPeriod(periodId);
       setPeriod(refreshed);
       setError('');
