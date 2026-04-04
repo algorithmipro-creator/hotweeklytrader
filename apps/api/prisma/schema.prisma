@@ -204,6 +204,7 @@ model InvestmentPeriod {
   updated_at             DateTime                 @updatedAt
 
   deposits               Deposit[]
+  settlement_snapshot    PeriodSettlementSnapshot?
 }
 
 model Deposit {
@@ -240,6 +241,26 @@ model Deposit {
   @@index([network, status])
   @@index([deposit_route])
   @@index([tx_hash])
+}
+
+model PeriodSettlementSnapshot {
+  settlement_snapshot_id String    @id @default(uuid())
+  investment_period_id    String    @unique
+  ending_balance_usdt     Decimal
+  total_deposits_usdt     Decimal
+  gross_pnl_usdt          Decimal
+  trader_fee_percent      Float     @default(40)
+  trader_fee_usdt         Decimal
+  network_fees_json       Json
+  net_distributable_usdt  Decimal
+  calculated_at           DateTime  @default(now())
+  approved_at             DateTime?
+  approved_by             String?
+
+  investment_period       InvestmentPeriod @relation(fields: [investment_period_id], references: [investment_period_id], onDelete: Cascade)
+
+  @@index([investment_period_id])
+  @@index([approved_at])
 }
 
 model ProfitLossReport {

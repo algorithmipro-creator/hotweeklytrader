@@ -54,6 +54,11 @@ export async function getAdminPeriods(params?: { status?: string }) {
   return response.data;
 }
 
+export async function getAdminPeriod(id: string) {
+  const response = await api.get(`/admin/periods/${id}`);
+  return response.data;
+}
+
 export async function createPeriod(data: any) {
   const response = await api.post('/admin/periods', data);
   return response.data;
@@ -61,6 +66,16 @@ export async function createPeriod(data: any) {
 
 export async function updatePeriodStatus(id: string, status: string) {
   const response = await api.put(`/admin/periods/${id}/status`, { status });
+  return response.data;
+}
+
+export async function previewPeriodSettlement(id: string, data: any) {
+  const response = await api.post(`/admin/periods/${id}/settlement/preview`, data);
+  return response.data;
+}
+
+export async function approvePeriodSettlement(id: string, data: any) {
+  const response = await api.post(`/admin/periods/${id}/settlement/approve`, data);
   return response.data;
 }
 
