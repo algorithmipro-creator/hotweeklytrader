@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { AdminPeriodsController } from './admin-periods.controller';
 import { PeriodsService } from './periods.service';
 import { PeriodAnalyticsService } from './period-analytics.service';
+import { PeriodSettlementService } from './period-settlement.service';
 
 describe('AdminPeriodsController', () => {
   let controller: AdminPeriodsController;
@@ -19,12 +20,19 @@ describe('AdminPeriodsController', () => {
     getSummary: jest.fn(),
   };
 
+  const mockSettlementService = {
+    getSnapshot: jest.fn(),
+    preview: jest.fn(),
+    approve: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       controllers: [AdminPeriodsController],
       providers: [
         { provide: PeriodsService, useValue: mockPeriodsService },
         { provide: PeriodAnalyticsService, useValue: mockAnalyticsService },
+        { provide: PeriodSettlementService, useValue: mockSettlementService },
       ],
     }).compile();
 

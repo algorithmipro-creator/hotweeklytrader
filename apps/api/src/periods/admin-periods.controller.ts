@@ -20,23 +20,11 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 @Controller('admin/periods')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AdminPeriodsController {
-  private settlementService?: PeriodSettlementService;
-
   constructor(
     private periodsService: PeriodsService,
     private analyticsService: PeriodAnalyticsService,
+    private settlementService: PeriodSettlementService,
   ) {}
-
-  private getSettlementService() {
-    if (!this.settlementService) {
-      this.settlementService = new PeriodSettlementService(
-        (this.periodsService as any).prisma,
-        this.analyticsService,
-      );
-    }
-
-    return this.settlementService;
-  }
 
   @Get()
   async findAll(@Query('status') status?: string): Promise<PeriodDto[]> {
@@ -54,7 +42,7 @@ export class AdminPeriodsController {
   @Get(':id')
   async findOne(@Param('id') id: string): Promise<PeriodDto> {
     const period = await this.periodsService.findOne(id);
-    const settlementSnapshot = await this.getSettlementService().getSnapshot(id);
+    const settlementSnapshot = await this.settlementService.getSnapshot(id);
     return {
       ...period,
       ...(await this.analyticsService.getSummary(period.investment_period_id)),
@@ -67,7 +55,7 @@ export class AdminPeriodsController {
     @Param('id') id: string,
     @Body() dto: PeriodSettlementInputDto,
   ): Promise<PeriodSettlementPreviewDto> {
-    return this.getSettlementService().preview(id, dto);
+    return this.settlementService.preview(id, dto);
   }
 
   @Post(':id/settlement/approve')
@@ -76,7 +64,7 @@ export class AdminPeriodsController {
     @Body() dto: PeriodSettlementInputDto,
     @CurrentUser() user: any,
   ): Promise<PeriodSettlementSnapshotDto> {
-    return this.getSettlementService().approve(id, dto, user.user_id);
+    return this.settlementService.approve(id, dto, user.user_id);
   }
 
   @Post()

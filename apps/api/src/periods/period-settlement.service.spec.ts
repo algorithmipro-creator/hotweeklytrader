@@ -166,4 +166,47 @@ describe('PeriodSettlementService', () => {
 
     expect(mockPrisma.periodSettlementSnapshot.create).not.toHaveBeenCalled();
   });
+
+  it('recovers from a concurrent approve race on snapshot creation', async () => {
+    mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
+      investment_period_id: 'period-1',
+      status: 'REPORTING',
+    });
+    mockAnalytics.getSummary.mockResolvedValue({
+      depositCount: 2,
+      totalDepositedUsdt: 1000,
+      averageDepositUsdt: 500,
+    });
+    mockPrisma.periodSettlementSnapshot.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        settlement_snapshot_id: 'snapshot-2',
+        investment_period_id: 'period-1',
+        ending_balance_usdt: new Prisma.Decimal('1300'),
+        total_deposits_usdt: new Prisma.Decimal('1000'),
+        gross_pnl_usdt: new Prisma.Decimal('300'),
+        trader_fee_percent: 25,
+        trader_fee_usdt: new Prisma.Decimal('75'),
+        network_fees_json: { TRON: 10, TON: 5, BSC: 15 },
+        net_distributable_usdt: new Prisma.Decimal('1210'),
+        calculated_at: new Date('2026-04-04T00:00:00.000Z'),
+        approved_at: new Date('2026-04-04T00:00:00.000Z'),
+        approved_by: 'admin-1',
+      });
+    mockPrisma.periodSettlementSnapshot.create.mockRejectedValue({
+      code: 'P2002',
+    });
+
+    await expect(
+      service.approve('period-1', {
+        ending_balance_usdt: 1300,
+        trader_fee_percent: 25,
+      }, 'admin-1'),
+    ).resolves.toMatchObject({
+      settlement_snapshot_id: 'snapshot-2',
+      approved_by: 'admin-1',
+    });
+
+    expect(mockPrisma.periodSettlementSnapshot.create).toHaveBeenCalled();
+  });
 });

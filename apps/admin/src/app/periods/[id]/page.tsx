@@ -70,17 +70,23 @@ export default function PeriodDetailPage() {
   }, [periodId]);
 
   const canSettle = period?.status === 'REPORTING';
-
+  const endingBalanceInput = form.ending_balance_usdt.trim();
+  const endingBalanceValue = endingBalanceInput === '' ? null : Number(endingBalanceInput);
+  const endingBalanceValid = endingBalanceValue !== null && Number.isFinite(endingBalanceValue);
   const payload = useMemo(() => ({
-    ending_balance_usdt: Number(form.ending_balance_usdt),
+    ending_balance_usdt: endingBalanceValue as number,
     trader_fee_percent: form.trader_fee_percent === '' ? undefined : Number(form.trader_fee_percent),
     tron_network_fee_usdt: Number(form.tron_network_fee_usdt || 0),
     ton_network_fee_usdt: Number(form.ton_network_fee_usdt || 0),
     bsc_network_fee_usdt: Number(form.bsc_network_fee_usdt || 0),
-  }), [form]);
+  }), [endingBalanceValue, form]);
 
   const runPreview = async () => {
     if (!periodId) return;
+    if (!endingBalanceValid) {
+      setError('Enter a valid ending balance before previewing settlement.');
+      return;
+    }
     setSubmitting(true);
     try {
       const data = await previewPeriodSettlement(periodId, payload);
@@ -95,6 +101,10 @@ export default function PeriodDetailPage() {
 
   const runApprove = async () => {
     if (!periodId) return;
+    if (!endingBalanceValid) {
+      setError('Enter a valid ending balance before approving settlement.');
+      return;
+    }
     setSubmitting(true);
     try {
       const data = await approvePeriodSettlement(periodId, payload);
@@ -236,19 +246,24 @@ export default function PeriodDetailPage() {
         <div className="flex flex-wrap gap-3">
           <button
             onClick={runPreview}
-            disabled={!canSettle || submitting}
+            disabled={!canSettle || submitting || !endingBalanceValid}
             className="px-4 py-2 rounded-lg bg-primary text-white text-sm disabled:opacity-50"
           >
             {submitting ? 'Working...' : 'Preview settlement'}
           </button>
           <button
             onClick={runApprove}
-            disabled={!canSettle || submitting}
+            disabled={!canSettle || submitting || !endingBalanceValid}
             className="px-4 py-2 rounded-lg bg-success text-white text-sm disabled:opacity-50"
           >
             Approve and freeze snapshot
           </button>
         </div>
+        {!endingBalanceValid && (
+          <div className="text-warning text-xs">
+            Ending balance is required and must be a valid number before previewing or approving.
+          </div>
+        )}
       </div>
 
       <div className="bg-bg-secondary rounded-lg p-4">

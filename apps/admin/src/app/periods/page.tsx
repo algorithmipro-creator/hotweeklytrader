@@ -169,24 +169,24 @@ export default function PeriodsPage() {
                     </span>
                   </td>
                   <td className="p-3">
-                    {nextStatus ? (
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      {nextStatus ? (
                         <button
                           onClick={() => handleAdvance(p.investment_period_id, nextStatus)}
                           className="px-3 py-1 rounded bg-bg-tertiary text-text text-xs border border-gray-600 hover:border-primary"
                         >
                           Advance to {STATUS_LABELS[nextStatus]}
                         </button>
-                        <Link
-                          href={`/periods/${p.investment_period_id}`}
-                          className="text-primary text-xs hover:underline"
-                        >
-                          Open
-                        </Link>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-text-secondary">No action</span>
-                    )}
+                      ) : (
+                        <span className="text-xs text-text-secondary">No action</span>
+                      )}
+                      <Link
+                        href={`/periods/${p.investment_period_id}`}
+                        className="text-primary text-xs hover:underline"
+                      >
+                        Open
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               );

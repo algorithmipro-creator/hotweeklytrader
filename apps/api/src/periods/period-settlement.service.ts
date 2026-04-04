@@ -47,23 +47,37 @@ export class PeriodSettlementService {
     const preview = await this.buildPreview(periodId, dto);
     const now = new Date();
 
-    const snapshot = await this.prisma.periodSettlementSnapshot.create({
-      data: {
-        investment_period_id: periodId,
-        ending_balance_usdt: new Prisma.Decimal(preview.endingBalanceUsdt),
-        total_deposits_usdt: new Prisma.Decimal(preview.totalDepositsUsdt),
-        gross_pnl_usdt: new Prisma.Decimal(preview.grossPnlUsdt),
-        trader_fee_percent: preview.traderFeePercent,
-        trader_fee_usdt: new Prisma.Decimal(preview.traderFeeUsdt),
-        network_fees_json: preview.networkFeesUsdt,
-        net_distributable_usdt: new Prisma.Decimal(preview.netDistributableUsdt),
-        calculated_at: now,
-        approved_at: now,
-        approved_by: approvedBy || null,
-      },
-    });
+    try {
+      const snapshot = await this.prisma.periodSettlementSnapshot.create({
+        data: {
+          investment_period_id: periodId,
+          ending_balance_usdt: new Prisma.Decimal(preview.endingBalanceUsdt),
+          total_deposits_usdt: new Prisma.Decimal(preview.totalDepositsUsdt),
+          gross_pnl_usdt: new Prisma.Decimal(preview.grossPnlUsdt),
+          trader_fee_percent: preview.traderFeePercent,
+          trader_fee_usdt: new Prisma.Decimal(preview.traderFeeUsdt),
+          network_fees_json: preview.networkFeesUsdt,
+          net_distributable_usdt: new Prisma.Decimal(preview.netDistributableUsdt),
+          calculated_at: now,
+          approved_at: now,
+          approved_by: approvedBy || null,
+        },
+      });
 
-    return this.serializeSnapshot(periodId, snapshot);
+      return this.serializeSnapshot(periodId, snapshot);
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        const snapshot = await this.prisma.periodSettlementSnapshot.findUnique({
+          where: { investment_period_id: periodId },
+        });
+
+        if (snapshot) {
+          return this.serializeSnapshot(periodId, snapshot);
+        }
+      }
+
+      throw error;
+    }
   }
 
   private async buildPreview(
