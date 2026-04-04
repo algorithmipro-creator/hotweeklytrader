@@ -23,6 +23,7 @@ type SettlementPreview = {
   calculated_at?: string;
   approved_at?: string | null;
   approved_by?: string | null;
+  preview_signature?: string;
 };
 
 type SettlementForm = {
@@ -55,7 +56,7 @@ function parseRequiredNumber(value: string): number | null {
 
 function parseOptionalNumber(value: string, fallback: number): number | null {
   const trimmed = value.trim();
-  if (trimmed === '') return fallback;
+  if (trimmed === '') return null;
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -153,7 +154,7 @@ export default function PeriodDetailPage() {
     try {
       const data = await previewPeriodSettlement(periodId, normalized.value);
       setPreview(data);
-      setPreviewSignature(normalized.signature);
+      setPreviewSignature(data.preview_signature || normalized.signature);
       setError('');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to preview settlement');
@@ -180,7 +181,7 @@ export default function PeriodDetailPage() {
     try {
       const data = await approvePeriodSettlement(periodId, normalized.value);
       setPreview(data);
-      setPreviewSignature(normalized.signature);
+      setPreviewSignature(data.preview_signature || normalized.signature);
       const refreshed = await getAdminPeriod(periodId);
       setPeriod(refreshed);
       setError('');

@@ -12,6 +12,7 @@ import {
   PeriodDto,
   PeriodStatus,
   PeriodSettlementInputDto,
+  ApprovePeriodSettlementDto,
   PeriodSettlementPreviewDto,
   PeriodSettlementSnapshotDto,
 } from './dto/period.dto';
@@ -61,7 +62,7 @@ export class AdminPeriodsController {
   @Post(':id/settlement/approve')
   async approveSettlement(
     @Param('id') id: string,
-    @Body() dto: PeriodSettlementInputDto,
+    @Body() dto: ApprovePeriodSettlementDto,
     @CurrentUser() user: any,
   ): Promise<PeriodSettlementSnapshotDto> {
     return this.settlementService.approve(id, dto, user.user_id);

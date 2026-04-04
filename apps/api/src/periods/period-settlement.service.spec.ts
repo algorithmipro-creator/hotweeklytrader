@@ -1,8 +1,11 @@
 import { Test } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { PeriodAnalyticsService } from './period-analytics.service';
 import { PeriodSettlementService } from './period-settlement.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PeriodSettlementInputDto } from './dto/period.dto';
 
 describe('PeriodSettlementService', () => {
   let service: PeriodSettlementService;
@@ -61,6 +64,7 @@ describe('PeriodSettlementService', () => {
       traderFeeUsdt: 200,
       netDistributableUsdt: 1270,
       networkFeesUsdt: { TRON: 10, TON: 5, BSC: 15 },
+      preview_signature: expect.any(String),
     });
   });
 
@@ -90,6 +94,14 @@ describe('PeriodSettlementService', () => {
       approved_by: 'admin-1',
     });
 
+    const preview = await service.preview('period-1', {
+      ending_balance_usdt: 1300,
+      trader_fee_percent: 25,
+      tron_network_fee_usdt: 10,
+      ton_network_fee_usdt: 5,
+      bsc_network_fee_usdt: 15,
+    });
+
     await expect(
       service.approve(
         'period-1',
@@ -99,6 +111,7 @@ describe('PeriodSettlementService', () => {
           tron_network_fee_usdt: 10,
           ton_network_fee_usdt: 5,
           bsc_network_fee_usdt: 15,
+          preview_signature: preview.preview_signature,
         },
         'admin-1',
       ),
@@ -117,15 +130,44 @@ describe('PeriodSettlementService', () => {
       approved_by: 'admin-1',
     });
 
-    expect(mockPrisma.periodSettlementSnapshot.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          investment_period_id: 'period-1',
-          trader_fee_percent: 25,
-          approved_by: 'admin-1',
-        }),
-      }),
-    );
+    const approveCreate = mockPrisma.periodSettlementSnapshot.upsert.mock.calls[0][0].create;
+    expect(approveCreate.investment_period_id).toBe('period-1');
+    expect(approveCreate.trader_fee_percent).toBe(25);
+    expect(approveCreate.approved_by).toBe('admin-1');
+    expect(approveCreate.ending_balance_usdt.toString()).toBe('1300');
+    expect(approveCreate.total_deposits_usdt.toString()).toBe('1000');
+    expect(approveCreate.gross_pnl_usdt.toString()).toBe('300');
+    expect(approveCreate.trader_fee_usdt.toString()).toBe('75');
+    expect(approveCreate.net_distributable_usdt.toString()).toBe('1195');
+  });
+
+  it('rejects stale approve attempts when previewed inputs no longer match live analytics', async () => {
+    mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
+      investment_period_id: 'period-1',
+      status: 'REPORTING',
+    });
+    mockAnalytics.getSummary
+      .mockResolvedValueOnce({
+        depositCount: 2,
+        totalDepositedUsdt: 100,
+        averageDepositUsdt: 50,
+      })
+      .mockResolvedValueOnce({
+        depositCount: 2,
+        totalDepositedUsdt: 110,
+        averageDepositUsdt: 55,
+      });
+
+    const preview = await service.preview('period-1', {
+      ending_balance_usdt: 150,
+      trader_fee_percent: 40,
+    });
+
+    await expect(service.approve('period-1', {
+      ending_balance_usdt: 150,
+      trader_fee_percent: 40,
+      preview_signature: preview.preview_signature,
+    } as any, 'admin-1')).rejects.toThrow('Settlement preview is stale. Please preview again before approving.');
   });
 
   it('returns an existing approved snapshot without rewriting it', async () => {
@@ -148,7 +190,8 @@ describe('PeriodSettlementService', () => {
       service.approve('period-1', {
         ending_balance_usdt: 1400,
         trader_fee_percent: 50,
-      }),
+        preview_signature: 'snapshot-sig',
+      } as any),
     ).resolves.toEqual({
       investment_period_id: 'period-1',
       settlement_snapshot_id: 'snapshot-1',
@@ -193,13 +236,21 @@ describe('PeriodSettlementService', () => {
       approved_by: 'admin-1',
     });
 
+    const preview = await service.preview('period-1', {
+      ending_balance_usdt: 0.3,
+      tron_network_fee_usdt: 0,
+      ton_network_fee_usdt: 0,
+      bsc_network_fee_usdt: 0,
+    });
+
     await expect(
       service.approve('period-1', {
         ending_balance_usdt: 0.3,
         tron_network_fee_usdt: 0,
         ton_network_fee_usdt: 0,
         bsc_network_fee_usdt: 0,
-      }, 'admin-1'),
+        preview_signature: preview.preview_signature,
+      } as any, 'admin-1'),
     ).resolves.toEqual({
       settlement_snapshot_id: 'snapshot-2',
       investment_period_id: 'period-1',
@@ -215,17 +266,12 @@ describe('PeriodSettlementService', () => {
       approved_by: 'admin-1',
     });
 
-    expect(mockPrisma.periodSettlementSnapshot.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          ending_balance_usdt: 0.3,
-          total_deposits_usdt: 0.1,
-          gross_pnl_usdt: 0.2,
-          trader_fee_usdt: 0.08,
-          net_distributable_usdt: 0.22,
-        }),
-      }),
-    );
+    const fractionalCreate = mockPrisma.periodSettlementSnapshot.upsert.mock.calls[0][0].create;
+    expect(fractionalCreate.ending_balance_usdt.toString()).toBe('0.3');
+    expect(fractionalCreate.total_deposits_usdt.toString()).toBe('0.1');
+    expect(fractionalCreate.gross_pnl_usdt.toString()).toBe('0.2');
+    expect(fractionalCreate.trader_fee_usdt.toString()).toBe('0.08');
+    expect(fractionalCreate.net_distributable_usdt.toString()).toBe('0.22');
   });
 
   it('rejects invalid optional fee inputs instead of silently defaulting', async () => {
@@ -245,5 +291,18 @@ describe('PeriodSettlementService', () => {
         tron_network_fee_usdt: NaN as any,
       }),
     ).rejects.toThrow('tron_network_fee_usdt must be a valid number');
+  });
+
+  it('rejects blank string numeric inputs at the DTO boundary', async () => {
+    const dto = plainToInstance(PeriodSettlementInputDto, {
+      ending_balance_usdt: '',
+      trader_fee_percent: '',
+      tron_network_fee_usdt: '',
+    });
+    const errors = validateSync(dto);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.map((error) => error.property)).toEqual(
+      expect.arrayContaining(['ending_balance_usdt', 'trader_fee_percent', 'tron_network_fee_usdt']),
+    );
   });
 });

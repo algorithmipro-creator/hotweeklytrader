@@ -77,4 +77,82 @@ describe('AdminPeriodsController', () => {
       settlement_snapshot: null,
     });
   });
+
+  it('proxies settlement preview and approval with the current user', async () => {
+    mockSettlementService.preview.mockResolvedValue({
+      investment_period_id: 'period-1',
+      totalDepositsUsdt: 300,
+      endingBalanceUsdt: 350,
+      grossPnlUsdt: 50,
+      traderFeePercent: 40,
+      traderFeeUsdt: 20,
+      netDistributableUsdt: 330,
+      networkFeesUsdt: { TRON: 0, TON: 0, BSC: 0 },
+      preview_signature: 'sig-1',
+    });
+    mockSettlementService.approve.mockResolvedValue({
+      investment_period_id: 'period-1',
+      settlement_snapshot_id: 'snapshot-1',
+      totalDepositsUsdt: 300,
+      endingBalanceUsdt: 350,
+      grossPnlUsdt: 50,
+      traderFeePercent: 40,
+      traderFeeUsdt: 20,
+      netDistributableUsdt: 330,
+      networkFeesUsdt: { TRON: 0, TON: 0, BSC: 0 },
+      calculated_at: '2026-04-04T00:00:00.000Z',
+      approved_at: '2026-04-04T00:00:00.000Z',
+      approved_by: 'admin-1',
+    });
+
+    await expect(
+      controller.previewSettlement('period-1', {
+        ending_balance_usdt: 350,
+        trader_fee_percent: 40,
+        preview_signature: 'sig-1',
+      } as any),
+    ).resolves.toEqual({
+      investment_period_id: 'period-1',
+      totalDepositsUsdt: 300,
+      endingBalanceUsdt: 350,
+      grossPnlUsdt: 50,
+      traderFeePercent: 40,
+      traderFeeUsdt: 20,
+      netDistributableUsdt: 330,
+      networkFeesUsdt: { TRON: 0, TON: 0, BSC: 0 },
+      preview_signature: 'sig-1',
+    });
+
+    await expect(
+      controller.approveSettlement('period-1', {
+        ending_balance_usdt: 350,
+        trader_fee_percent: 40,
+        preview_signature: 'sig-1',
+      } as any, { user_id: 'admin-1' }),
+    ).resolves.toEqual({
+      investment_period_id: 'period-1',
+      settlement_snapshot_id: 'snapshot-1',
+      totalDepositsUsdt: 300,
+      endingBalanceUsdt: 350,
+      grossPnlUsdt: 50,
+      traderFeePercent: 40,
+      traderFeeUsdt: 20,
+      netDistributableUsdt: 330,
+      networkFeesUsdt: { TRON: 0, TON: 0, BSC: 0 },
+      calculated_at: '2026-04-04T00:00:00.000Z',
+      approved_at: '2026-04-04T00:00:00.000Z',
+      approved_by: 'admin-1',
+    });
+
+    expect(mockSettlementService.preview).toHaveBeenCalledWith('period-1', expect.objectContaining({
+      ending_balance_usdt: 350,
+      trader_fee_percent: 40,
+      preview_signature: 'sig-1',
+    }));
+    expect(mockSettlementService.approve).toHaveBeenCalledWith('period-1', expect.objectContaining({
+      ending_balance_usdt: 350,
+      trader_fee_percent: 40,
+      preview_signature: 'sig-1',
+    }), 'admin-1');
+  });
 });

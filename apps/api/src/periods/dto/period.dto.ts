@@ -6,7 +6,18 @@ import {
   IsDateString,
   IsEnum,
   IsNumber,
+  IsDefined,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
+
+const strictNumberTransform = () =>
+  Transform(({ value }) => {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value === 'string' && value.trim() === '') return Number.NaN;
+    if (typeof value === 'string') return Number(value);
+    return value;
+  });
 
 export enum PeriodStatus {
   FUNDING = 'FUNDING',
@@ -83,24 +94,35 @@ export class UpdatePeriodDto {
 }
 
 export class PeriodSettlementInputDto {
+  @strictNumberTransform()
   @IsNumber()
   ending_balance_usdt: number;
 
+  @strictNumberTransform()
   @IsNumber()
   @IsOptional()
   trader_fee_percent?: number;
 
+  @strictNumberTransform()
   @IsNumber()
   @IsOptional()
   tron_network_fee_usdt?: number;
 
+  @strictNumberTransform()
   @IsNumber()
   @IsOptional()
   ton_network_fee_usdt?: number;
 
+  @strictNumberTransform()
   @IsNumber()
   @IsOptional()
   bsc_network_fee_usdt?: number;
+}
+
+export class ApprovePeriodSettlementDto extends PeriodSettlementInputDto {
+  @IsString()
+  @IsDefined()
+  preview_signature: string;
 }
 
 export class PeriodSettlementPreviewDto {
@@ -116,13 +138,27 @@ export class PeriodSettlementPreviewDto {
     TON: number;
     BSC: number;
   };
+  preview_signature: string;
 }
 
-export class PeriodSettlementSnapshotDto extends PeriodSettlementPreviewDto {
+export class PeriodSettlementSnapshotDto {
+  investment_period_id: string;
+  totalDepositsUsdt: number;
+  endingBalanceUsdt: number;
+  grossPnlUsdt: number;
+  traderFeePercent: number;
+  traderFeeUsdt: number;
+  netDistributableUsdt: number;
+  networkFeesUsdt: {
+    TRON: number;
+    TON: number;
+    BSC: number;
+  };
   settlement_snapshot_id: string;
   calculated_at: string;
   approved_at: string | null;
   approved_by: string | null;
+  preview_signature?: string;
 }
 
 export class PeriodDto {

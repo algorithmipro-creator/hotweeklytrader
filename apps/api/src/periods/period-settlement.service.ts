@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { InvestmentPeriodStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  ApprovePeriodSettlementDto,
   PeriodSettlementInputDto,
   PeriodSettlementPreviewDto,
   PeriodSettlementSnapshotDto,
@@ -27,12 +29,13 @@ export class PeriodSettlementService {
 
   async preview(periodId: string, dto: PeriodSettlementInputDto): Promise<PeriodSettlementPreviewDto> {
     await this.assertReportingPeriod(periodId);
-    return this.buildPreview(periodId, dto);
+    const calculation = await this.buildCalculation(periodId, dto);
+    return calculation.preview;
   }
 
   async approve(
     periodId: string,
-    dto: PeriodSettlementInputDto,
+    dto: ApprovePeriodSettlementDto,
     approvedBy?: string | null,
   ): Promise<PeriodSettlementSnapshotDto> {
     const existing = await this.prisma.periodSettlementSnapshot.findUnique({
@@ -44,20 +47,23 @@ export class PeriodSettlementService {
     }
 
     await this.assertReportingPeriod(periodId);
-    const preview = await this.buildPreview(periodId, dto);
+    const calculation = await this.buildCalculation(periodId, dto);
+    if (dto.preview_signature !== calculation.preview.preview_signature) {
+      throw new BadRequestException('Settlement preview is stale. Please preview again before approving.');
+    }
     const now = new Date();
 
     const snapshot = await this.prisma.periodSettlementSnapshot.upsert({
       where: { investment_period_id: periodId },
       create: {
         investment_period_id: periodId,
-        ending_balance_usdt: preview.endingBalanceUsdt,
-        total_deposits_usdt: preview.totalDepositsUsdt,
-        gross_pnl_usdt: preview.grossPnlUsdt,
-        trader_fee_percent: preview.traderFeePercent,
-        trader_fee_usdt: preview.traderFeeUsdt,
-        network_fees_json: preview.networkFeesUsdt,
-        net_distributable_usdt: preview.netDistributableUsdt,
+        ending_balance_usdt: calculation.decimals.endingBalanceUsdt,
+        total_deposits_usdt: calculation.decimals.totalDepositsUsdt,
+        gross_pnl_usdt: calculation.decimals.grossPnlUsdt,
+        trader_fee_percent: calculation.preview.traderFeePercent,
+        trader_fee_usdt: calculation.decimals.traderFeeUsdt,
+        network_fees_json: calculation.preview.networkFeesUsdt,
+        net_distributable_usdt: calculation.decimals.netDistributableUsdt,
         calculated_at: now,
         approved_at: now,
         approved_by: approvedBy || null,
@@ -68,10 +74,19 @@ export class PeriodSettlementService {
     return this.serializeSnapshot(periodId, snapshot);
   }
 
-  private async buildPreview(
+  private async buildCalculation(
     periodId: string,
     dto: PeriodSettlementInputDto,
-  ): Promise<PeriodSettlementPreviewDto> {
+  ): Promise<{
+    preview: PeriodSettlementPreviewDto;
+    decimals: {
+      endingBalanceUsdt: Prisma.Decimal;
+      totalDepositsUsdt: Prisma.Decimal;
+      grossPnlUsdt: Prisma.Decimal;
+      traderFeeUsdt: Prisma.Decimal;
+      netDistributableUsdt: Prisma.Decimal;
+    };
+  }> {
     const summary = await this.analyticsService.getSummary(periodId);
     const endingBalanceUsdt = this.requiredDecimal(dto.ending_balance_usdt, 'ending_balance_usdt');
     const totalDepositsUsdt = this.requiredDecimal(summary.totalDepositedUsdt, 'totalDepositedUsdt');
@@ -90,8 +105,7 @@ export class PeriodSettlementService {
       ? grossPnlUsdt.mul(new Prisma.Decimal(traderFeePercent)).div(100)
       : new Prisma.Decimal(0);
     const netDistributableUsdt = endingBalanceUsdt.sub(traderFeeUsdt).sub(totalNetworkFees);
-
-    return {
+    const preview = {
       investment_period_id: periodId,
       totalDepositsUsdt: this.toNumber(totalDepositsUsdt),
       endingBalanceUsdt: this.toNumber(endingBalanceUsdt),
@@ -100,6 +114,31 @@ export class PeriodSettlementService {
       traderFeeUsdt: this.toNumber(traderFeeUsdt),
       netDistributableUsdt: this.toNumber(netDistributableUsdt),
       networkFeesUsdt,
+      preview_signature: this.buildPreviewSignature({
+        periodId,
+        totalDepositsUsdt,
+        endingBalanceUsdt,
+        grossPnlUsdt,
+        traderFeePercent,
+        traderFeeUsdt,
+        netDistributableUsdt,
+        networkFeesUsdt: {
+          TRON: tronFee,
+          TON: tonFee,
+          BSC: bscFee,
+        },
+      }),
+    };
+
+    return {
+      preview,
+      decimals: {
+        endingBalanceUsdt,
+        totalDepositsUsdt,
+        grossPnlUsdt,
+        traderFeeUsdt,
+        netDistributableUsdt,
+      },
     };
   }
 
@@ -163,6 +202,38 @@ export class PeriodSettlementService {
       throw new BadRequestException(`${fieldName} must be a valid number`);
     }
     return new Prisma.Decimal(value);
+  }
+
+  private buildPreviewSignature(input: {
+    periodId: string;
+    totalDepositsUsdt: Prisma.Decimal;
+    endingBalanceUsdt: Prisma.Decimal;
+    grossPnlUsdt: Prisma.Decimal;
+    traderFeePercent: number;
+    traderFeeUsdt: Prisma.Decimal;
+    netDistributableUsdt: Prisma.Decimal;
+    networkFeesUsdt: {
+      TRON: Prisma.Decimal;
+      TON: Prisma.Decimal;
+      BSC: Prisma.Decimal;
+    };
+  }): string {
+    const payload = {
+      periodId: input.periodId,
+      totalDepositsUsdt: input.totalDepositsUsdt.toFixed(),
+      endingBalanceUsdt: input.endingBalanceUsdt.toFixed(),
+      grossPnlUsdt: input.grossPnlUsdt.toFixed(),
+      traderFeePercent: input.traderFeePercent,
+      traderFeeUsdt: input.traderFeeUsdt.toFixed(),
+      netDistributableUsdt: input.netDistributableUsdt.toFixed(),
+      networkFeesUsdt: {
+        TRON: input.networkFeesUsdt.TRON.toFixed(),
+        TON: input.networkFeesUsdt.TON.toFixed(),
+        BSC: input.networkFeesUsdt.BSC.toFixed(),
+      },
+    };
+
+    return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
   }
 
   private requiredDecimal(value: number | undefined, fieldName: string): Prisma.Decimal {
