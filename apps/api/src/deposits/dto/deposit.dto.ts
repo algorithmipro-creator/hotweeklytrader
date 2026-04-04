@@ -41,6 +41,8 @@ export class DepositDto {
   deposit_id: string;
   user_id: string;
   investment_period_id: string;
+  investment_period_title?: string | null;
+  investment_period_status?: string | null;
   network: string;
   asset_symbol: string;
   deposit_route: string;

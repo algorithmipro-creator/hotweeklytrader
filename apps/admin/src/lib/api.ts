@@ -64,7 +64,7 @@ export async function updatePeriodStatus(id: string, status: string) {
   return response.data;
 }
 
-export async function getAdminDeposits(params?: { status?: string; network?: string; limit?: number; offset?: number }) {
+export async function getAdminDeposits(params?: { status?: string; network?: string; investment_period_id?: string; limit?: number; offset?: number }) {
   const response = await api.get('/admin/deposits', { params });
   return response.data;
 }

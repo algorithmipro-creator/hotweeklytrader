@@ -15,15 +15,26 @@ export class AdminDepositsController {
   async findAll(
     @Query('status') status?: string,
     @Query('network') network?: string,
+    @Query('investment_period_id') investmentPeriodId?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     const where: any = {};
     if (status) where.status = status;
     if (network) where.network = network;
+    if (investmentPeriodId) where.investment_period_id = investmentPeriodId;
 
     const deposits = await (this.depositsService as any).prisma.deposit.findMany({
       where,
+      include: {
+        investmentPeriod: {
+          select: {
+            title: true,
+            status: true,
+            investment_period_id: true,
+          },
+        },
+      },
       orderBy: { created_at: 'desc' },
       take: limit ? parseInt(limit, 10) : 50,
       skip: offset ? parseInt(offset, 10) : 0,
@@ -31,6 +42,8 @@ export class AdminDepositsController {
 
     return deposits.map((d: any) => ({
       ...d,
+      investment_period_title: d.investmentPeriod?.title || null,
+      investment_period_status: d.investmentPeriod?.status || null,
       requested_amount: d.requested_amount ? parseFloat(d.requested_amount.toString()) : null,
       confirmed_amount: d.confirmed_amount ? parseFloat(d.confirmed_amount.toString()) : null,
       created_at: d.created_at.toISOString(),

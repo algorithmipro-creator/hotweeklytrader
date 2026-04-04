@@ -2,6 +2,7 @@ import {
   Controller, Get, Post, Put, Param, Body, Query, UseGuards,
 } from '@nestjs/common';
 import { PeriodsService } from './periods.service';
+import { PeriodAnalyticsService } from './period-analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreatePeriodDto, UpdatePeriodDto, PeriodDto, PeriodStatus } from './dto/period.dto';
@@ -10,11 +11,21 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 @Controller('admin/periods')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AdminPeriodsController {
-  constructor(private periodsService: PeriodsService) {}
+  private analyticsService: PeriodAnalyticsService;
+
+  constructor(private periodsService: PeriodsService) {
+    this.analyticsService = new PeriodAnalyticsService((this.periodsService as any).prisma);
+  }
 
   @Get()
   async findAll(@Query('status') status?: string): Promise<PeriodDto[]> {
-    return this.periodsService.findAll(status || 'ALL');
+    const periods = await this.periodsService.findAll(status || 'ALL');
+    return Promise.all(
+      periods.map(async (period: any) => ({
+        ...period,
+        ...(await this.analyticsService.getSummary(period.investment_period_id)),
+      })),
+    );
   }
 
   @Get(':id')

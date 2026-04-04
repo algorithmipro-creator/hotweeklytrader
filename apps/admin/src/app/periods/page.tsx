@@ -139,6 +139,9 @@ export default function PeriodsPage() {
               <th className="text-left p-3">Period</th>
               <th className="text-left p-3">Networks</th>
               <th className="text-left p-3">Assets</th>
+              <th className="text-left p-3">Deposits</th>
+              <th className="text-left p-3">Total USDT</th>
+              <th className="text-left p-3">Average USDT</th>
               <th className="text-left p-3">Status</th>
               <th className="text-left p-3">Action</th>
             </tr>
@@ -156,6 +159,9 @@ export default function PeriodsPage() {
                   </td>
                   <td className="p-3 text-text-secondary">{p.accepted_networks.join(', ')}</td>
                   <td className="p-3 text-text-secondary">{p.accepted_assets.join(', ')}</td>
+                  <td className="p-3 text-text-secondary">{p.depositCount ?? 0}</td>
+                  <td className="p-3 text-text-secondary">{(p.totalDepositedUsdt ?? 0).toFixed?.(2) ?? p.totalDepositedUsdt ?? 0}</td>
+                  <td className="p-3 text-text-secondary">{(p.averageDepositUsdt ?? 0).toFixed?.(2) ?? p.averageDepositUsdt ?? 0}</td>
                   <td className="p-3">
                     <span className={`px-2 py-0.5 rounded text-xs ${STATUS_BADGES[p.status] || 'bg-gray-500/20 text-gray-400'}`}>
                       {currentLabel}
