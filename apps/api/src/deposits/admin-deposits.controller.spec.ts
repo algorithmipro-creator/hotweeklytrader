@@ -15,6 +15,7 @@ describe('AdminDepositsController', () => {
   const mockDepositsService = {
     prisma: mockPrisma,
     findOne: jest.fn(),
+    findAdminOne: jest.fn(),
     transition: jest.fn(),
   };
 
@@ -65,5 +66,20 @@ describe('AdminDepositsController', () => {
         where: { investment_period_id: 'period-1' },
       }),
     );
+  });
+
+  it('loads deposit detail through the admin-specific lookup', async () => {
+    mockDepositsService.findAdminOne.mockResolvedValue({
+      deposit_id: 'dep-1',
+      status: 'ACTIVE',
+    });
+
+    await expect(controller.findOne('dep-1')).resolves.toEqual({
+      deposit_id: 'dep-1',
+      status: 'ACTIVE',
+    });
+
+    expect(mockDepositsService.findAdminOne).toHaveBeenCalledWith('dep-1');
+    expect(mockDepositsService.findOne).not.toHaveBeenCalled();
   });
 });

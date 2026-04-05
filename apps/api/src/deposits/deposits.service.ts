@@ -40,6 +40,18 @@ export class DepositsService {
     return this.serialize(deposit);
   }
 
+  async findAdminOne(depositId: string): Promise<DepositDto> {
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { deposit_id: depositId },
+    });
+
+    if (!deposit) {
+      throw new NotFoundException('Deposit not found');
+    }
+
+    return this.serialize(deposit);
+  }
+
   async create(userId: string, dto: CreateDepositDto): Promise<DepositDto> {
     const period = await this.prisma.investmentPeriod.findUnique({
       where: { investment_period_id: dto.investment_period_id },

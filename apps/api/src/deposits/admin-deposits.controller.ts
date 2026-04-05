@@ -57,7 +57,7 @@ export class AdminDepositsController {
 
   @Get(':id')
   async findOne(@Param('id') id: string): Promise<DepositDto> {
-    return this.depositsService.findOne(id, '');
+    return this.depositsService.findAdminOne(id);
   }
 
   @Put(':id/status')

@@ -65,6 +65,11 @@ export async function getProfile() {
   return response.data;
 }
 
+export async function getAdminDashboardStats() {
+  const response = await api.get('/admin/dashboard/stats');
+  return response.data;
+}
+
 export async function getAdminUsers(params?: { search?: string; status?: string; limit?: number; offset?: number }) {
   const response = await api.get('/admin/users', { params });
   return response.data;
@@ -187,6 +192,30 @@ export async function recordPayoutFailed(id: string, reason: string) {
 
 export async function getAuditLog(params?: { actorType?: string; entityType?: string; action?: string; limit?: number; offset?: number }) {
   const response = await api.get('/admin/audit', { params });
+  return response.data;
+}
+
+export async function getAdminSupportCases(params?: {
+  status?: string;
+  assigned_to?: string;
+  priority?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const response = await api.get('/admin/support', { params });
+  return response.data;
+}
+
+export async function updateAdminSupportCase(
+  id: string,
+  data: {
+    status?: string;
+    priority?: string;
+    assigned_to?: string;
+    resolution_summary?: string;
+  },
+) {
+  const response = await api.put(`/admin/support/${id}`, data);
   return response.data;
 }
 

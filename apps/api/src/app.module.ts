@@ -16,6 +16,7 @@ import { PayoutsModule } from './payouts/payouts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SupportModule } from './support/support.module';
 import { WalletsModule } from './wallets/wallets.module';
+import { AdminModule } from './admin/admin.module';
 import appConfig from './config/app.config';
 import blockchainConfig from './config/blockchain.config';
 import databaseConfig from './config/database.config';
@@ -47,6 +48,7 @@ import jwtConfig from './config/jwt.config';
     NotificationsModule,
     SupportModule,
     WalletsModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getAdminDeposits, getAdminUsers, getAdminPayouts, getAdminReports } from '../lib/api';
+import { getAdminDashboardStats } from '../lib/api';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -15,20 +15,14 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      getAdminDeposits({ status: 'ACTIVE', limit: 1 }),
-      getAdminDeposits({ status: 'MANUAL_REVIEW', limit: 1 }),
-      getAdminPayouts({ status: 'PENDING_APPROVAL', limit: 1 }),
-      getAdminReports({ status: 'PENDING_APPROVAL', limit: 1 }),
-      getAdminUsers({ limit: 1 }),
-    ])
-      .then(([active, review, payouts, reports, users]) => {
+    getAdminDashboardStats()
+      .then((data) => {
         setStats({
-          activeDeposits: active.length || 0,
-          pendingReview: review.length || 0,
-          pendingPayouts: payouts.length || 0,
-          pendingReports: reports.length || 0,
-          totalUsers: users.length || 0,
+          activeDeposits: data.activeDeposits || 0,
+          pendingReview: data.pendingReview || 0,
+          pendingPayouts: data.pendingPayouts || 0,
+          pendingReports: data.pendingReports || 0,
+          totalUsers: data.totalUsers || 0,
         });
       })
       .catch(console.error)
