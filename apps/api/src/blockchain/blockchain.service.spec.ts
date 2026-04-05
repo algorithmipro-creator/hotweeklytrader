@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { BlockchainService } from './blockchain.service';
 import { BscScanWatcherService } from './networks/bscscan-watcher.service';
+import { TonUsdtWatcherService } from './networks/ton-usdt-watcher.service';
 import { TronUsdtWatcherService } from './networks/tron-usdt-watcher.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DepositsService } from '../deposits/deposits.service';
@@ -26,6 +27,15 @@ describe('BlockchainService', () => {
     checkTransaction: jest.fn(),
   };
 
+  const mockTonWatcher = {
+    getNetworkName: jest.fn().mockReturnValue('TON'),
+    start: jest.fn(),
+    stop: jest.fn(),
+    isRunning: jest.fn().mockReturnValue(true),
+    getLatestBlock: jest.fn().mockResolvedValue(0),
+    checkTransaction: jest.fn(),
+  };
+
   const mockPrisma = {
     transactionLog: {
       create: jest.fn(),
@@ -44,6 +54,7 @@ describe('BlockchainService', () => {
         BlockchainService,
         { provide: BscScanWatcherService, useValue: mockBscWatcher },
         { provide: TronUsdtWatcherService, useValue: mockTronWatcher },
+        { provide: TonUsdtWatcherService, useValue: mockTonWatcher },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: DepositsService, useValue: mockDeposits },
       ],
@@ -65,6 +76,11 @@ describe('BlockchainService', () => {
 
     it('should return watcher for TRON', () => {
       const watcher = service['getWatcherForNetwork']('TRON');
+      expect(watcher).toBeDefined();
+    });
+
+    it('should return watcher for TON', () => {
+      const watcher = service['getWatcherForNetwork']('TON');
       expect(watcher).toBeDefined();
     });
   });
