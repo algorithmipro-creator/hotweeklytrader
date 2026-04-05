@@ -1,8 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getProfile } from '../lib/api';
+import { adminLogin, getProfile } from '../lib/api';
 import { useRouter, usePathname } from 'next/navigation';
+import { waitForTelegramInitData } from '../lib/telegram';
 
 interface User {
   user_id: string;
@@ -24,6 +25,9 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
 });
 
+const ADMIN_HOME_PATH = '/';
+const ADMIN_LOGIN_PATH = '/login';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -31,35 +35,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('admin_token');
-    if (!token) {
-      if (pathname !== '/login') {
-        router.push('/login');
-      }
-      setLoading(false);
-      return;
-    }
+    const bootstrapAuth = async () => {
+      const adminToken = localStorage.getItem('admin_token');
+      const userToken = localStorage.getItem('auth_token');
 
-    getProfile()
-      .then((profile) => {
-        setUser(profile);
-        if (pathname === '/login') {
-          router.push('/');
-        }
-      })
+      if (!adminToken && userToken) {
+        localStorage.setItem('admin_token', userToken);
+      }
+
+      const initData = !localStorage.getItem('admin_token')
+        ? await waitForTelegramInitData()
+        : '';
+
+      if (!localStorage.getItem('admin_token') && initData) {
+        await adminLogin(initData);
+      }
+    };
+
+    bootstrapAuth()
       .catch(() => {
         localStorage.removeItem('admin_token');
-        if (pathname !== '/login') {
-          router.push('/login');
-        }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        const token = localStorage.getItem('admin_token');
+        if (!token) {
+          if (pathname !== ADMIN_LOGIN_PATH) {
+            router.push(ADMIN_LOGIN_PATH);
+          }
+          setLoading(false);
+          return;
+        }
+
+        getProfile()
+          .then((profile) => {
+            setUser(profile);
+            if (pathname === ADMIN_LOGIN_PATH) {
+              router.push(ADMIN_HOME_PATH);
+            }
+          })
+          .catch(() => {
+            localStorage.removeItem('admin_token');
+            if (pathname !== ADMIN_LOGIN_PATH) {
+              router.push(ADMIN_LOGIN_PATH);
+            }
+          })
+          .finally(() => setLoading(false));
+      });
   }, [pathname, router]);
 
   const logout = () => {
     localStorage.removeItem('admin_token');
     setUser(null);
-    router.push('/login');
+    router.push(ADMIN_LOGIN_PATH);
   };
 
   return (

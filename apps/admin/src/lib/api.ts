@@ -1,6 +1,24 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000/api/v1';
+const ADMIN_LOGIN_PATH = '/login';
+const API_BASE_URL = 'https://hotweeklytrader.duckdns.org/api/v1';
+
+function getStoredToken(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  const adminToken = localStorage.getItem('admin_token');
+  if (adminToken) {
+    return adminToken;
+  }
+
+  const userToken = localStorage.getItem('auth_token');
+  if (userToken) {
+    localStorage.setItem('admin_token', userToken);
+    return userToken;
+  }
+
+  return null;
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -8,7 +26,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+  const token = getStoredToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -20,7 +38,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('admin_token');
-      window.location.href = '/login';
+      window.location.href = ADMIN_LOGIN_PATH;
     }
     return Promise.reject(error);
   },
@@ -30,6 +48,7 @@ export async function adminLogin(telegramInitData: string) {
   const response = await api.post('/auth/telegram', { initData: telegramInitData });
   if (response.data.accessToken) {
     localStorage.setItem('admin_token', response.data.accessToken);
+    localStorage.setItem('auth_token', response.data.accessToken);
   }
   return response.data;
 }

@@ -1,14 +1,59 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminLogin } from '../../lib/api';
+import { getTelegramInitData, waitForTelegramInitData } from '../../lib/telegram';
+
+const ADMIN_HOME_PATH = '/';
 
 export default function LoginPage() {
   const router = useRouter();
   const [initData, setInitData] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loginFromTelegram = async () => {
+      const token = localStorage.getItem('admin_token') || localStorage.getItem('auth_token');
+      if (token) {
+        router.push(ADMIN_HOME_PATH);
+        return;
+      }
+
+      const immediateInitData = getTelegramInitData();
+      const resolvedInitData = immediateInitData || await waitForTelegramInitData();
+
+      if (!resolvedInitData || cancelled) {
+        return;
+      }
+
+      setInitData(resolvedInitData);
+      setLoading(true);
+      setError(null);
+
+      try {
+        await adminLogin(resolvedInitData);
+        router.push(ADMIN_HOME_PATH);
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err.response?.data?.message || 'Authentication failed');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loginFromTelegram();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,7 +62,7 @@ export default function LoginPage() {
 
     try {
       await adminLogin(initData);
-      router.push('/');
+      router.push(ADMIN_HOME_PATH);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Authentication failed');
     } finally {
@@ -61,7 +106,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-text-secondary text-xs mt-4">
-          For development: Use Telegram WebApp initData from the Mini App or bot.
+          If you open the admin panel from the same browser session as the mini app, login should happen automatically.
         </p>
       </div>
     </div>
