@@ -235,6 +235,7 @@ model Deposit {
   investment_period         InvestmentPeriod @relation(fields: [investment_period_id], references: [investment_period_id])
   report                    ProfitLossReport?
   payouts                   Payout[]
+  payout_registry_items     PeriodPayoutRegistryItem[]
 
   @@index([user_id])
   @@index([investment_period_id])
