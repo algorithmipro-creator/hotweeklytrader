@@ -16,4 +16,9 @@ export default registerAs('blockchain', () => ({
     confirmationsRequired: parseInt(process.env.BLOCKCHAIN_TRON_CONFIRMATIONS || '19', 10),
     depositAddress: process.env.BLOCKCHAIN_TRON_DEPOSIT_ADDRESS || '',
   },
+  ton: {
+    rpcUrl: process.env.BLOCKCHAIN_TON_RPC_URL || 'https://toncenter.com/api/v2',
+    confirmationsRequired: parseInt(process.env.BLOCKCHAIN_TON_CONFIRMATIONS || '20', 10),
+    depositAddress: process.env.BLOCKCHAIN_TON_DEPOSIT_ADDRESS || '',
+  },
 }));

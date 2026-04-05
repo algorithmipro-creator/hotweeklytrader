@@ -150,6 +150,7 @@ model User {
   username            String?
   display_name        String?
   language            String        @default("en")
+  role                UserRole      @default(USER)
   status              UserStatus    @default(ACTIVE)
   legal_ack_version   String?
   risk_ack_version    String?

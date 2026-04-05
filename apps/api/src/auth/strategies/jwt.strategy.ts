@@ -10,10 +10,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     configService: ConfigService,
     private prisma: PrismaService,
   ) {
+    const jwtSecret = configService.get<string>('jwt.secret');
+    if (!jwtSecret) {
+      throw new Error('JWT secret is not configured');
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('jwt.secret') || 'dev-secret',
+      secretOrKey: jwtSecret,
     });
   }
 
@@ -29,7 +34,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return {
       user_id: user.user_id,
       telegram_id: user.telegram_id.toString(),
-      role: payload.role,
+      role: user.role,
     };
   }
 }

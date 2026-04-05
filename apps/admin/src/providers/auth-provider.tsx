@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { adminLogin, clearAdminSession, getProfile } from '../lib/api';
+import { adminLogin, clearAdminSession, getProfile, isAdminRole } from '../lib/api';
 import { useRouter, usePathname } from 'next/navigation';
 import { waitForTelegramInitData } from '../lib/telegram';
 
@@ -10,6 +10,7 @@ interface User {
   telegram_id: string;
   username: string | null;
   display_name: string | null;
+  role: string;
   status: string;
 }
 
@@ -36,13 +37,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const bootstrapAuth = async () => {
-      const adminToken = localStorage.getItem('admin_token');
-      const userToken = localStorage.getItem('auth_token');
-
-      if (!adminToken && userToken) {
-        localStorage.setItem('admin_token', userToken);
-      }
-
       const initData = !localStorage.getItem('admin_token')
         ? await waitForTelegramInitData()
         : '';
@@ -68,6 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         getProfile()
           .then((profile) => {
+            if (!isAdminRole(profile.role)) {
+              throw new Error('Admin access denied');
+            }
             setUser(profile);
             if (pathname === ADMIN_LOGIN_PATH) {
               router.push(ADMIN_HOME_PATH);

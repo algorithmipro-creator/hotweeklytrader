@@ -6,12 +6,6 @@ import { DepositStateMachine } from './deposit-state-machine';
 import { randomUUID } from 'crypto';
 import { InvestmentPeriodStatus } from '@prisma/client';
 
-const DEPOSIT_ADDRESSES: Record<string, string> = {
-  BSC: '0x1fFFbcda5bB208CbAd95882a9e57FA9354533AaC',
-  TON: 'TON adress1',
-  TRON: process.env.BLOCKCHAIN_TRON_DEPOSIT_ADDRESS || '',
-};
-
 @Injectable()
 export class DepositsService {
   constructor(
@@ -25,7 +19,7 @@ export class DepositsService {
       orderBy: { created_at: 'desc' },
     });
 
-    return deposits.map(this.serialize);
+    return deposits.map((deposit) => this.serialize(deposit));
   }
 
   async findOne(depositId: string, userId: string): Promise<DepositDto> {
@@ -73,6 +67,19 @@ export class DepositsService {
       throw new BadRequestException(`Asset ${dto.asset_symbol} is not supported for this network`);
     }
 
+    const normalizedSourceAddress = dto.source_address.toLowerCase();
+    const existingPendingDeposit = await this.prisma.deposit.findFirst({
+      where: {
+        network: dto.network,
+        source_address: normalizedSourceAddress,
+        status: { in: ['AWAITING_TRANSFER', 'DETECTED', 'CONFIRMING'] },
+      },
+    });
+
+    if (existingPendingDeposit) {
+      throw new BadRequestException('A pending deposit already exists for this source address on this network');
+    }
+
     const depositRoute = `dr_${randomUUID().replace(/-/g, '')}`;
     const routeExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -82,7 +89,7 @@ export class DepositsService {
         investment_period_id: dto.investment_period_id,
         network: dto.network,
         asset_symbol: dto.asset_symbol,
-        source_address: dto.source_address.toLowerCase(),
+        source_address: normalizedSourceAddress,
         deposit_route: depositRoute,
         requested_amount: dto.requested_amount ? dto.requested_amount.toString() : null,
         route_expires_at: routeExpiresAt,
@@ -147,7 +154,7 @@ export class DepositsService {
       network: deposit.network,
       asset_symbol: deposit.asset_symbol,
       deposit_route: deposit.deposit_route,
-      deposit_address: DEPOSIT_ADDRESSES[deposit.network] || '',
+      deposit_address: this.getDepositAddress(deposit.network),
       source_address: deposit.source_address,
       tx_hash: deposit.tx_hash,
       requested_amount: deposit.requested_amount ? parseFloat(deposit.requested_amount.toString()) : null,
@@ -163,5 +170,21 @@ export class DepositsService {
       completed_at: deposit.completed_at?.toISOString() || null,
       cancelled_at: deposit.cancelled_at?.toISOString() || null,
     };
+  }
+
+  private getDepositAddress(network: string): string {
+    if (network === 'BSC') {
+      return this.configService.get<string>('blockchain.bsc.depositAddress') || '';
+    }
+
+    if (network === 'TRON') {
+      return this.configService.get<string>('blockchain.tron.depositAddress') || '';
+    }
+
+    if (network === 'TON') {
+      return this.configService.get<string>('blockchain.ton.depositAddress') || '';
+    }
+
+    return '';
   }
 }

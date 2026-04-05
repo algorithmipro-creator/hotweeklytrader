@@ -3,12 +3,13 @@ import {
 } from '@nestjs/common';
 import { PayoutsService } from './payouts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreatePayoutDto, CreateBatchDto, PayoutDto } from './dto/payout.dto';
 
 @Controller('admin/payouts')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'SUPER_ADMIN')
 export class AdminPayoutsController {
   constructor(private payoutsService: PayoutsService) {}
 

@@ -11,12 +11,19 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('jwt.secret'),
-        signOptions: {
-          expiresIn: config.get<string>('jwt.expiresIn') || '24h',
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const secret = config.get<string>('jwt.secret');
+        if (!secret) {
+          throw new Error('JWT secret is not configured');
+        }
+
+        return {
+          secret,
+          signOptions: {
+            expiresIn: config.get<string>('jwt.expiresIn') || '24h',
+          },
+        };
+      },
     }),
   ],
   providers: [AuthService, JwtStrategy],

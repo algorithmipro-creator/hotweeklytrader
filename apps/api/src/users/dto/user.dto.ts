@@ -12,6 +12,7 @@ export class UserProfileDto {
   username: string | null;
   display_name: string | null;
   language: string;
+  role: string;
   status: string;
   legal_ack_version: string | null;
   risk_ack_version: string | null;

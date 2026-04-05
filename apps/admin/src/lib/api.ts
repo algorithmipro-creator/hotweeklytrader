@@ -7,24 +7,16 @@ export function clearAdminSession() {
   if (typeof window === 'undefined') return;
 
   localStorage.removeItem('admin_token');
-  localStorage.removeItem('auth_token');
+}
+
+export function isAdminRole(role: string | null | undefined): boolean {
+  return role === 'ADMIN' || role === 'SUPER_ADMIN';
 }
 
 function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;
 
-  const adminToken = localStorage.getItem('admin_token');
-  if (adminToken) {
-    return adminToken;
-  }
-
-  const userToken = localStorage.getItem('auth_token');
-  if (userToken) {
-    localStorage.setItem('admin_token', userToken);
-    return userToken;
-  }
-
-  return null;
+  return localStorage.getItem('admin_token');
 }
 
 const api = axios.create({
@@ -53,9 +45,13 @@ api.interceptors.response.use(
 
 export async function adminLogin(telegramInitData: string) {
   const response = await api.post('/auth/telegram', { initData: telegramInitData });
+  if (!isAdminRole(response.data.user?.role)) {
+    clearAdminSession();
+    throw new Error('Admin access denied');
+  }
+
   if (response.data.accessToken) {
     localStorage.setItem('admin_token', response.data.accessToken);
-    localStorage.setItem('auth_token', response.data.accessToken);
   }
   return response.data;
 }

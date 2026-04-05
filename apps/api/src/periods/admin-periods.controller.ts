@@ -7,7 +7,7 @@ import { PeriodAnalyticsService } from './period-analytics.service';
 import { PeriodSettlementService } from './period-settlement.service';
 import { PeriodPayoutRegistryService } from './period-payout-registry.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import {
   CreatePeriodDto,
   UpdatePeriodDto,
@@ -22,6 +22,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('admin/periods')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'SUPER_ADMIN')
 export class AdminPeriodsController {
   constructor(
     private periodsService: PeriodsService,

@@ -3,11 +3,12 @@ import {
 } from '@nestjs/common';
 import { DepositsService } from './deposits.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 import { DepositDto, TransitionDepositDto } from './dto/deposit.dto';
 
 @Controller('admin/deposits')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'SUPER_ADMIN')
 export class AdminDepositsController {
   constructor(private depositsService: DepositsService) {}
 

@@ -17,7 +17,7 @@ export default function LoginPage() {
     let cancelled = false;
 
     const loginFromTelegram = async () => {
-      const token = localStorage.getItem('admin_token') || localStorage.getItem('auth_token');
+      const token = localStorage.getItem('admin_token');
       if (token) {
         router.push(ADMIN_HOME_PATH);
         return;
@@ -39,7 +39,7 @@ export default function LoginPage() {
         router.push(ADMIN_HOME_PATH);
       } catch (err: any) {
         if (!cancelled) {
-          setError(err.response?.data?.message || 'Authentication failed');
+          setError(err.response?.data?.message || err.message || 'Authentication failed');
         }
       } finally {
         if (!cancelled) {
@@ -64,7 +64,7 @@ export default function LoginPage() {
       await adminLogin(initData);
       router.push(ADMIN_HOME_PATH);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Authentication failed');
+      setError(err.response?.data?.message || err.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -106,7 +106,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-text-secondary text-xs mt-4">
-          If you open the admin panel from the same browser session as the mini app, login should happen automatically.
+          Open the admin panel through the Telegram admin button for automatic login, or paste Telegram WebApp initData manually.
         </p>
       </div>
     </div>

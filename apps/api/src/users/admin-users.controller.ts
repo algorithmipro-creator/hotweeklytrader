@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles, RolesGuard } from '../auth/guards/roles.guard';
 
 class AdminUpdateUserDto {
   status?: string;
@@ -11,6 +11,7 @@ class AdminUpdateUserDto {
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'SUPER_ADMIN')
 export class AdminUsersController {
   constructor(private usersService: UsersService) {}
 

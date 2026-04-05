@@ -1,4 +1,4 @@
-import { PrismaClient, UserStatus, InvestmentPeriodStatus } from '@prisma/client';
+import { PrismaClient, UserRole, UserStatus, InvestmentPeriodStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -8,11 +8,15 @@ async function main() {
   if (adminTelegramId > 0n) {
     await prisma.user.upsert({
       where: { telegram_id: adminTelegramId },
-      update: {},
+      update: {
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+      },
       create: {
         telegram_id: adminTelegramId,
         username: 'admin',
         display_name: 'System Admin',
+        role: UserRole.ADMIN,
         status: UserStatus.ACTIVE,
       },
     });

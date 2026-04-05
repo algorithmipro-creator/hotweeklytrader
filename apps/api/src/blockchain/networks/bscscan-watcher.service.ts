@@ -282,65 +282,103 @@ export class BscScanWatcherService implements BlockchainWatcher, OnModuleInit, O
         status: { in: ['AWAITING_TRANSFER', 'DETECTED', 'CONFIRMING'] },
         source_address: tx.fromAddress.toLowerCase(),
       },
+      orderBy: { created_at: 'asc' },
     });
 
-    for (const deposit of deposits) {
-      const confirmedAmount = parseFloat(tx.amount);
+    const deposit = this.selectTrackedDeposit(deposits, tx.txHash);
+    if (!deposit) {
+      return;
+    }
 
-      if (deposit.status === 'AWAITING_TRANSFER') {
-        await this.depositsService.transition(deposit.deposit_id, 'DETECTED');
-        await this.prisma.deposit.update({
-          where: { deposit_id: deposit.deposit_id },
-          data: {
-            tx_hash: tx.txHash,
-            source_address: tx.fromAddress,
-            confirmed_amount: confirmedAmount.toString(),
-            confirmation_count: tx.confirmations,
-          },
-        });
-        this.logger.log(`Deposit ${deposit.deposit_id} detected: ${confirmedAmount} USDT`);
+    const confirmedAmount = parseFloat(tx.amount);
 
-        const user = await this.prisma.user.findUnique({ where: { user_id: deposit.user_id } });
-        if (user) {
-          await this.notificationsService.send({
-            user_id: user.user_id,
-            type: 'TRANSFER_DETECTED',
-            channel: 'TELEGRAM',
-            title: 'Transfer Detected',
-            body: `We detected a transfer of ${confirmedAmount} USDT on BSC. Waiting for confirmations...`,
-            related_entity_type: 'Deposit',
-            related_entity_id: deposit.deposit_id,
-          });
-        }
-      } else if (tx.confirmations >= 12 && deposit.status === 'CONFIRMING') {
-        await this.depositsService.transition(deposit.deposit_id, 'CONFIRMED');
-        await this.depositsService.transition(deposit.deposit_id, 'ACTIVE');
-        this.logger.log(`Deposit ${deposit.deposit_id} confirmed and activated`);
+    if (deposit.status === 'AWAITING_TRANSFER') {
+      await this.depositsService.transition(deposit.deposit_id, 'DETECTED');
+      await this.prisma.deposit.update({
+        where: { deposit_id: deposit.deposit_id },
+        data: {
+          tx_hash: tx.txHash,
+          source_address: tx.fromAddress,
+          confirmed_amount: confirmedAmount.toString(),
+          confirmation_count: tx.confirmations,
+        },
+      });
+      this.logger.log(`Deposit ${deposit.deposit_id} detected: ${confirmedAmount} USDT`);
 
-        const user = await this.prisma.user.findUnique({ where: { user_id: deposit.user_id } });
-        if (user) {
-          await this.notificationsService.send({
-            user_id: user.user_id,
-            type: 'TRANSFER_CONFIRMED',
-            channel: 'TELEGRAM',
-            title: 'Deposit Confirmed',
-            body: `Your deposit of ${confirmedAmount} USDT is confirmed and active!`,
-            related_entity_type: 'Deposit',
-            related_entity_id: deposit.deposit_id,
-          });
-        }
-      } else if (deposit.status === 'DETECTED' && tx.confirmations > 0) {
-        await this.depositsService.transition(deposit.deposit_id, 'CONFIRMING');
-        await this.prisma.deposit.update({
-          where: { deposit_id: deposit.deposit_id },
-          data: {
-            tx_hash: tx.txHash,
-            source_address: tx.fromAddress,
-            confirmed_amount: confirmedAmount.toString(),
-            confirmation_count: tx.confirmations,
-          },
+      const user = await this.prisma.user.findUnique({ where: { user_id: deposit.user_id } });
+      if (user) {
+        await this.notificationsService.send({
+          user_id: user.user_id,
+          type: 'TRANSFER_DETECTED',
+          channel: 'TELEGRAM',
+          title: 'Transfer Detected',
+          body: `We detected a transfer of ${confirmedAmount} USDT on BSC. Waiting for confirmations...`,
+          related_entity_type: 'Deposit',
+          related_entity_id: deposit.deposit_id,
         });
       }
+    } else if (tx.confirmations >= 12 && deposit.status === 'CONFIRMING') {
+      await this.depositsService.transition(deposit.deposit_id, 'CONFIRMED');
+      await this.depositsService.transition(deposit.deposit_id, 'ACTIVE');
+      this.logger.log(`Deposit ${deposit.deposit_id} confirmed and activated`);
+
+      const user = await this.prisma.user.findUnique({ where: { user_id: deposit.user_id } });
+      if (user) {
+        await this.notificationsService.send({
+          user_id: user.user_id,
+          type: 'TRANSFER_CONFIRMED',
+          channel: 'TELEGRAM',
+          title: 'Deposit Confirmed',
+          body: `Your deposit of ${confirmedAmount} USDT is confirmed and active!`,
+          related_entity_type: 'Deposit',
+          related_entity_id: deposit.deposit_id,
+        });
+      }
+    } else if (deposit.status === 'DETECTED' && tx.confirmations > 0) {
+      await this.depositsService.transition(deposit.deposit_id, 'CONFIRMING');
+      await this.prisma.deposit.update({
+        where: { deposit_id: deposit.deposit_id },
+        data: {
+          tx_hash: tx.txHash,
+          source_address: tx.fromAddress,
+          confirmed_amount: confirmedAmount.toString(),
+          confirmation_count: tx.confirmations,
+        },
+      });
     }
+  }
+
+  private selectTrackedDeposit(deposits: any[], txHash: string): any | null {
+    if (deposits.length === 0) {
+      return null;
+    }
+
+    return [...deposits].sort((left, right) => {
+      const txMatchDelta = this.getExactTxMatchPriority(left, txHash) - this.getExactTxMatchPriority(right, txHash);
+      if (txMatchDelta !== 0) {
+        return txMatchDelta;
+      }
+
+      const statusDelta = this.getDepositStatusPriority(left.status) - this.getDepositStatusPriority(right.status);
+      if (statusDelta !== 0) {
+        return statusDelta;
+      }
+
+      return this.getCreatedAtTimestamp(left) - this.getCreatedAtTimestamp(right);
+    })[0];
+  }
+
+  private getExactTxMatchPriority(deposit: { tx_hash?: string | null }, txHash: string): number {
+    return deposit.tx_hash === txHash ? 0 : 1;
+  }
+
+  private getDepositStatusPriority(status: string): number {
+    if (status === 'CONFIRMING') return 0;
+    if (status === 'DETECTED') return 1;
+    return 2;
+  }
+
+  private getCreatedAtTimestamp(deposit: { created_at?: Date | null }): number {
+    return deposit.created_at instanceof Date ? deposit.created_at.getTime() : 0;
   }
 }

@@ -16,6 +16,7 @@ describe('TronUsdtWatcherService', () => {
   const mockPrisma = {
     deposit: {
       findMany: jest.fn(),
+      update: jest.fn(),
     },
     user: {
       findUnique: jest.fn(),
@@ -94,5 +95,43 @@ describe('TronUsdtWatcherService', () => {
   it('formats raw TRON token values using token decimals', () => {
     expect((service as any).formatTokenAmount('125000000', 6)).toBe('125');
     expect((service as any).formatTokenAmount('1234500', 6)).toBe('1.2345');
+  });
+
+  it('matches a transfer to only one deterministic pending deposit', async () => {
+    mockPrisma.deposit.findMany.mockResolvedValue([
+      {
+        deposit_id: 'older-awaiting',
+        user_id: 'user-1',
+        source_address: 'ta_source_1',
+        status: 'AWAITING_TRANSFER',
+        tx_hash: null,
+        created_at: new Date('2026-04-01T00:00:00.000Z'),
+      },
+      {
+        deposit_id: 'newer-awaiting',
+        user_id: 'user-2',
+        source_address: 'ta_source_1',
+        status: 'AWAITING_TRANSFER',
+        tx_hash: null,
+        created_at: new Date('2026-04-02T00:00:00.000Z'),
+      },
+    ]);
+    mockPrisma.user.findUnique.mockResolvedValue({ user_id: 'user-1' });
+
+    await (service as any).processDetectedTransfer({
+      txHash: 'tron-tx-1',
+      blockNumber: 100,
+      fromAddress: 'ta_source_1',
+      toAddress: 'TVPaJrwCFLV3jvVomcZL2U8PT59QSpeimZ',
+      amount: '125',
+      tokenSymbol: 'USDT',
+      confirmations: 1,
+      timestamp: new Date(),
+      network: 'TRON',
+      rawPayload: '{}',
+    });
+
+    expect(mockDepositsService.transition).toHaveBeenCalledTimes(1);
+    expect(mockDepositsService.transition).toHaveBeenCalledWith('older-awaiting', 'DETECTED');
   });
 });
