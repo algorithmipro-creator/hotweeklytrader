@@ -12,6 +12,14 @@ const NEXT_STATUS_BY_CURRENT: Record<string, string | null> = {
   CLOSED: null,
 };
 
+const ACTION_LABEL_BY_STATUS: Record<string, string | null> = {
+  FUNDING: 'Start Trading',
+  TRADING_ACTIVE: 'Open Reporting',
+  REPORTING: 'Open Payouts',
+  PAYOUT_IN_PROGRESS: 'Close Period',
+  CLOSED: null,
+};
+
 const STATUS_LABELS: Record<string, string> = {
   FUNDING: 'Funding',
   TRADING_ACTIVE: 'Trading active',
@@ -32,6 +40,7 @@ export default function PeriodsPage() {
   const [periods, setPeriods] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [actionError, setActionError] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     period_type: 'fixed',
@@ -66,9 +75,11 @@ export default function PeriodsPage() {
   const handleAdvance = async (id: string, nextStatus: string) => {
     try {
       await updatePeriodStatus(id, nextStatus);
-      setPeriods((prev) => prev.map((p) => (p.investment_period_id === id ? { ...p, status: nextStatus } : p)));
+      const refreshed = await getAdminPeriods();
+      setPeriods(refreshed);
+      setActionError('');
     } catch (err) {
-      console.error('Failed to update period status:', err);
+      setActionError((err as any)?.response?.data?.message || 'Failed to update period status');
     }
   };
 
@@ -85,6 +96,12 @@ export default function PeriodsPage() {
           {showForm ? 'Cancel' : '+ New Period'}
         </button>
       </div>
+
+      {actionError && (
+        <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+          {actionError}
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleCreate} className="bg-bg-secondary rounded-lg p-4 mb-6 space-y-3">
@@ -150,6 +167,7 @@ export default function PeriodsPage() {
           <tbody>
             {periods.map((p) => {
               const nextStatus = NEXT_STATUS_BY_CURRENT[p.status] || null;
+              const nextActionLabel = ACTION_LABEL_BY_STATUS[p.status] || null;
               const currentLabel = STATUS_LABELS[p.status] || p.status;
 
               return (
@@ -170,12 +188,12 @@ export default function PeriodsPage() {
                   </td>
                   <td className="p-3">
                     <div className="flex items-center gap-2">
-                      {nextStatus ? (
+                      {nextStatus && nextActionLabel ? (
                         <button
                           onClick={() => handleAdvance(p.investment_period_id, nextStatus)}
                           className="px-3 py-1 rounded bg-bg-tertiary text-text text-xs border border-gray-600 hover:border-primary"
                         >
-                          Advance to {STATUS_LABELS[nextStatus]}
+                          {nextActionLabel}
                         </button>
                       ) : (
                         <span className="text-xs text-text-secondary">No action</span>

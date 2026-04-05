@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePeriodDto, UpdatePeriodDto } from './dto/period.dto';
-import { InvestmentPeriodStatus } from '@prisma/client';
+import { InvestmentPeriodStatus, PayoutStatus } from '@prisma/client';
 import { PeriodTransitionGuard } from './period-transition.guard';
 
 @Injectable()
@@ -60,8 +60,17 @@ export class PeriodsService {
   }
 
   async update(id: string, dto: UpdatePeriodDto) {
-    const existing = await this.prisma.investmentPeriod.findUnique({
+    const prisma = this.prisma as any;
+    const existing = await prisma.investmentPeriod.findUnique({
       where: { investment_period_id: id },
+      include: {
+        settlement_snapshot: true,
+        payout_registry: {
+          include: {
+            items: true,
+          },
+        },
+      },
     });
 
     if (!existing) {
@@ -74,7 +83,7 @@ export class PeriodsService {
     if (dto.end_date) updateData.end_date = new Date(dto.end_date);
     if (dto.lock_date) updateData.lock_date = new Date(dto.lock_date);
     if (dto.status && dto.status !== existing.status) {
-      PeriodTransitionGuard.assertCanTransition(existing.status, dto.status);
+      this.assertAllowedStatusTransition(existing, dto.status);
       updateData.status = dto.status as unknown as InvestmentPeriodStatus;
     }
     if (dto.accepted_networks) updateData.accepted_networks = dto.accepted_networks;
@@ -84,7 +93,7 @@ export class PeriodsService {
       return this.serialize(existing);
     }
 
-    const period = await this.prisma.investmentPeriod.update({
+    const period = await prisma.investmentPeriod.update({
       where: { investment_period_id: id },
       data: updateData,
     });
@@ -93,8 +102,19 @@ export class PeriodsService {
   }
 
   async updateStatus(id: string, status: string) {
-    const existing = await this.prisma.investmentPeriod.findUnique({
+    const investmentPeriod = this.prisma.investmentPeriod as any;
+    const findUnique = investmentPeriod.findUnique as (...args: any[]) => Promise<any>;
+    const update = investmentPeriod.update as (...args: any[]) => Promise<any>;
+    const existing = await findUnique({
       where: { investment_period_id: id },
+      include: {
+        settlement_snapshot: true,
+        payout_registry: {
+          include: {
+            items: true,
+          },
+        },
+      },
     });
 
     if (!existing) {
@@ -105,14 +125,51 @@ export class PeriodsService {
       return this.serialize(existing);
     }
 
-    PeriodTransitionGuard.assertCanTransition(existing.status, status);
+    this.assertAllowedStatusTransition(existing, status);
 
-    const period = await this.prisma.investmentPeriod.update({
+    const period = await update({
       where: { investment_period_id: id },
       data: { status: status as InvestmentPeriodStatus },
     });
 
     return this.serialize(period);
+  }
+
+  private assertAllowedStatusTransition(period: any, nextStatus: string) {
+    PeriodTransitionGuard.assertCanTransition(period.status, nextStatus);
+
+    if (period.status === InvestmentPeriodStatus.REPORTING && nextStatus === InvestmentPeriodStatus.PAYOUT_IN_PROGRESS) {
+      this.assertApprovedSettlement(period);
+    }
+
+    if (period.status === InvestmentPeriodStatus.PAYOUT_IN_PROGRESS && nextStatus === InvestmentPeriodStatus.CLOSED) {
+      this.assertResolvedPayoutRegistry(period);
+    }
+  }
+
+  private assertApprovedSettlement(period: any) {
+    if (!period.settlement_snapshot?.approved_at) {
+      throw new BadRequestException('An approved settlement snapshot is required before opening payouts');
+    }
+  }
+
+  private assertResolvedPayoutRegistry(period: any) {
+    const registry = period.payout_registry;
+
+    if (!registry) {
+      throw new BadRequestException('A payout registry must exist before closing the period');
+    }
+
+    const unresolvedStatuses = [
+      PayoutStatus.PREPARED,
+      PayoutStatus.PENDING_APPROVAL,
+      PayoutStatus.APPROVED,
+      PayoutStatus.SENT,
+    ];
+    const unresolved = (registry.items || []).filter((item: any) => unresolvedStatuses.includes(item.status));
+    if (unresolved.length > 0) {
+      throw new BadRequestException('All payout registry items must be resolved before closing the period');
+    }
   }
 
   private serialize(period: any) {

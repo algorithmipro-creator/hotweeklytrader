@@ -9,6 +9,7 @@ import {
   getAdminPeriod,
   getPeriodPayoutRegistry,
   previewPeriodSettlement,
+  updatePeriodStatus,
 } from '../../../lib/api';
 import { StatusBadge } from '../../../components/status-badge';
 
@@ -88,6 +89,16 @@ type PeriodPayoutRegistry = {
   };
   items: PeriodPayoutRegistryItem[];
 };
+
+const LIFECYCLE_ACTIONS: Record<string, { label: string; nextStatus: string } | null> = {
+  FUNDING: { label: 'Start Trading', nextStatus: 'TRADING_ACTIVE' },
+  TRADING_ACTIVE: { label: 'Open Reporting', nextStatus: 'REPORTING' },
+  REPORTING: { label: 'Open Payouts', nextStatus: 'PAYOUT_IN_PROGRESS' },
+  PAYOUT_IN_PROGRESS: { label: 'Close Period', nextStatus: 'CLOSED' },
+  CLOSED: null,
+};
+
+const RESOLVED_PAYOUT_STATUSES = new Set(['CONFIRMED', 'FAILED', 'CANCELLED']);
 
 const money = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,
@@ -230,6 +241,23 @@ export default function PeriodDetailPage() {
   const canApprove = canPreview && Boolean(preview?.preview_signature) && previewMatchesForm && !hasApprovedSnapshot;
   const previewStale = Boolean(preview) && !previewMatchesForm && !hasApprovedSnapshot;
   const canGenerateRegistry = Boolean(period?.settlement_snapshot?.approved_at) && !registrySubmitting;
+  const lifecycleAction = period ? LIFECYCLE_ACTIONS[period.status] : null;
+  const unresolvedRegistryItems = payoutRegistry?.items.filter((item) => !RESOLVED_PAYOUT_STATUSES.has(item.status)).length ?? 0;
+  const canRunLifecycleAction = Boolean(lifecycleAction)
+    && (
+      (lifecycleAction?.nextStatus === 'TRADING_ACTIVE' || lifecycleAction?.nextStatus === 'REPORTING')
+      || (lifecycleAction?.nextStatus === 'PAYOUT_IN_PROGRESS' && hasApprovedSnapshot)
+      || (lifecycleAction?.nextStatus === 'CLOSED' && Boolean(payoutRegistry) && !registryLoading && !registryError && unresolvedRegistryItems === 0)
+    );
+  const lifecycleActionHint = period?.status === 'REPORTING' && !hasApprovedSnapshot
+    ? 'Approve the settlement snapshot before opening payouts.'
+    : period?.status === 'PAYOUT_IN_PROGRESS' && registryError
+      ? registryError
+      : period?.status === 'PAYOUT_IN_PROGRESS' && registryLoading
+        ? 'Loading payout registry...'
+        : period?.status === 'PAYOUT_IN_PROGRESS' && unresolvedRegistryItems > 0
+          ? 'Resolve all payout registry items before closing the period.'
+          : '';
 
   const runPreview = async () => {
     if (!periodId) return;
@@ -306,6 +334,22 @@ export default function PeriodDetailPage() {
     }
   };
 
+  const runLifecycleTransition = async () => {
+    if (!periodId || !lifecycleAction) return;
+    if (!canRunLifecycleAction) {
+      setError(lifecycleActionHint || 'This lifecycle action is not available right now.');
+      return;
+    }
+    try {
+      await updatePeriodStatus(periodId, lifecycleAction.nextStatus);
+      const refreshed = await getAdminPeriod(periodId);
+      setPeriod(refreshed);
+      setError('');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update period status');
+    }
+  };
+
   if (loading) return <div className="text-text-secondary">Loading...</div>;
   if (!period) return <div className="text-danger">Period not found.</div>;
 
@@ -328,6 +372,29 @@ export default function PeriodDetailPage() {
           <div>{period.period_type}</div>
           <div>{period.investment_period_id}</div>
         </div>
+      </div>
+
+      <div className="bg-bg-secondary rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-text-secondary text-xs uppercase">Lifecycle Action</div>
+          <div className="font-medium">
+            {lifecycleAction ? lifecycleAction.label : 'No action'}
+          </div>
+          {lifecycleActionHint && (
+            <div className="text-xs text-warning mt-1">{lifecycleActionHint}</div>
+          )}
+        </div>
+        {lifecycleAction ? (
+          <button
+            onClick={runLifecycleTransition}
+            disabled={!canRunLifecycleAction}
+            className="px-4 py-2 rounded-lg bg-primary text-white text-sm disabled:opacity-50"
+          >
+            {lifecycleAction.label}
+          </button>
+        ) : (
+          <span className="text-xs text-text-secondary">No action available</span>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
