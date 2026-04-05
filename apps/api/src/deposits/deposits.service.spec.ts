@@ -150,6 +150,7 @@ describe('DepositsService', () => {
       expect(mockPrisma.deposit.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            source_address: '0:5444f0a419124369089817f7bdbf55860842b1ee56dcc60ffe84d69afed9f903',
             status: 'AWAITING_TRANSFER',
           }),
         }),

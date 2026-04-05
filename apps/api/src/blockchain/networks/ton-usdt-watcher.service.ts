@@ -17,6 +17,7 @@ type TonJettonTransfer = {
   destination: string;
   jetton_master: string;
   source: string;
+  source_user_friendly?: string;
   transaction_hash: string;
   transaction_lt: string;
   transaction_now: number;
@@ -129,8 +130,8 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
 
       const trackedAddresses = new Set(
         deposits
-          .map((deposit) => this.normalizeAddress(deposit.source_address || ''))
-          .filter((address): address is string => Boolean(address)),
+          .flatMap((deposit: any) => this.getAddressKeys(deposit.source_address || ''))
+          .filter((address: string): address is string => Boolean(address)),
       );
 
       if (trackedAddresses.size === 0) return;
@@ -145,8 +146,9 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
           continue;
         }
 
+        const transferSourceKeys = this.getTransferSourceKeys(transfer);
         const fromAddress = this.normalizeAddress(transfer.source || '');
-        if (!trackedAddresses.has(fromAddress)) {
+        if (!transferSourceKeys.some((key) => trackedAddresses.has(key))) {
           this.lastSeenLt = transferLt > this.lastSeenLt ? transferLt : this.lastSeenLt;
           continue;
         }
@@ -163,18 +165,21 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
         const confirmations =
           txMasterchainSeqno > 0 ? Math.max(currentMasterchainSeqno - txMasterchainSeqno, 0) : 0;
 
-        await this.processDetectedTransfer({
-          txHash: transfer.transaction_hash,
-          blockNumber: txMasterchainSeqno,
-          fromAddress,
-          toAddress: this.depositAddress,
-          amount: this.formatTokenAmount(transfer.amount),
-          tokenSymbol: 'USDT',
-          confirmations,
-          timestamp: new Date((transfer.transaction_now || Math.floor(Date.now() / 1000)) * 1000),
-          network: 'TON',
-          rawPayload: JSON.stringify(transfer),
-        });
+        await this.processDetectedTransfer(
+          {
+            txHash: transfer.transaction_hash,
+            blockNumber: txMasterchainSeqno,
+            fromAddress,
+            toAddress: this.depositAddress,
+            amount: this.formatTokenAmount(transfer.amount),
+            tokenSymbol: 'USDT',
+            confirmations,
+            timestamp: new Date((transfer.transaction_now || Math.floor(Date.now() / 1000)) * 1000),
+            network: 'TON',
+            rawPayload: JSON.stringify(transfer),
+          },
+          transferSourceKeys,
+        );
 
         if (shouldAdvanceCursor) {
           this.lastSeenLt = transferLt > this.lastSeenLt ? transferLt : this.lastSeenLt;
@@ -205,14 +210,20 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
         throw new Error(`TON Center returned ${response.status}`);
       }
 
-      const payload = (await response.json()) as { jetton_transfers?: TonJettonTransfer[] };
+      const payload = (await response.json()) as {
+        jetton_transfers?: TonJettonTransfer[];
+        address_book?: Record<string, { user_friendly?: string }>;
+      };
       const batch = payload.jetton_transfers || [];
       transfers.push(
         ...batch.filter(
           (transfer) =>
             this.normalizeAddress(transfer.destination || '') === this.normalizedDepositAddress &&
             this.normalizeAddress(transfer.jetton_master || '') === this.normalizedUsdtMasterAddress,
-        ),
+        ).map((transfer) => ({
+          ...transfer,
+          source_user_friendly: payload.address_book?.[transfer.source || '']?.user_friendly,
+        })),
       );
 
       if (batch.length < TON_POLL_LIMIT) {
@@ -308,7 +319,7 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
     return `${whole.toString()}.${fractionText}`;
   }
 
-  private async processDetectedTransfer(tx: OnChainTransaction): Promise<void> {
+  private async processDetectedTransfer(tx: OnChainTransaction, sourceKeys?: string[]): Promise<void> {
     const candidateDeposits = await this.prisma.deposit.findMany({
       where: {
         network: tx.network,
@@ -318,7 +329,7 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
     });
     const deposits =
       tx.network === 'TON'
-        ? this.pickTonDepositsForTransaction(candidateDeposits, tx)
+        ? this.pickTonDepositsForTransaction(candidateDeposits, tx, sourceKeys)
         : candidateDeposits;
 
     for (const deposit of deposits) {
@@ -395,9 +406,10 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
     }
   }
 
-  private pickTonDepositsForTransaction(candidateDeposits: any[], tx: OnChainTransaction): any[] {
+  private pickTonDepositsForTransaction(candidateDeposits: any[], tx: OnChainTransaction, sourceKeys?: string[]): any[] {
+    const resolvedSourceKeys = sourceKeys && sourceKeys.length > 0 ? sourceKeys : this.getAddressKeys(tx.fromAddress);
     const matchingDeposits = candidateDeposits.filter(
-      (deposit) => this.normalizeAddress(deposit.source_address || '') === this.normalizeAddress(tx.fromAddress),
+      (deposit) => this.getAddressKeys(deposit.source_address || '').some((key) => resolvedSourceKeys.includes(key)),
     );
 
     if (matchingDeposits.length <= 1) {
@@ -423,5 +435,27 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
       const rightTime = new Date(right.created_at || 0).getTime();
       return rightTime - leftTime;
     });
+  }
+
+  private getTransferSourceKeys(transfer: TonJettonTransfer): string[] {
+    return this.getAddressKeys(transfer.source || '', transfer.source_user_friendly || '');
+  }
+
+  private getAddressKeys(...addresses: string[]): string[] {
+    const keys = new Set<string>();
+
+    for (const address of addresses) {
+      const trimmed = address?.trim();
+      if (!trimmed) continue;
+
+      keys.add(trimmed.toLowerCase());
+      try {
+        keys.add(Address.parse(trimmed).toRawString().toLowerCase());
+      } catch {
+        // Keep the original lower-cased form as a fallback for already persisted broken friendly addresses.
+      }
+    }
+
+    return [...keys];
   }
 }

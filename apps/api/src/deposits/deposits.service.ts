@@ -5,6 +5,7 @@ import { CreateDepositDto, DepositDto, DepositStatus } from './dto/deposit.dto';
 import { DepositStateMachine } from './deposit-state-machine';
 import { randomUUID } from 'crypto';
 import { InvestmentPeriodStatus } from '@prisma/client';
+import { Address } from '@ton/core';
 
 @Injectable()
 export class DepositsService {
@@ -19,7 +20,7 @@ export class DepositsService {
       orderBy: { created_at: 'desc' },
     });
 
-    return deposits.map((deposit) => this.serialize(deposit));
+    return deposits.map((deposit: any) => this.serialize(deposit));
   }
 
   async findOne(depositId: string, userId: string): Promise<DepositDto> {
@@ -67,7 +68,7 @@ export class DepositsService {
       throw new BadRequestException(`Asset ${dto.asset_symbol} is not supported for this network`);
     }
 
-    const normalizedSourceAddress = dto.source_address.toLowerCase();
+    const normalizedSourceAddress = this.normalizeSourceAddress(dto.network, dto.source_address);
     const existingPendingDeposit = await this.prisma.deposit.findFirst({
       where: {
         network: dto.network,
@@ -186,5 +187,17 @@ export class DepositsService {
     }
 
     return '';
+  }
+
+  private normalizeSourceAddress(network: string, sourceAddress: string): string {
+    if (network !== 'TON') {
+      return sourceAddress.toLowerCase();
+    }
+
+    try {
+      return Address.parse(sourceAddress).toRawString().toLowerCase();
+    } catch {
+      return sourceAddress.trim();
+    }
   }
 }
