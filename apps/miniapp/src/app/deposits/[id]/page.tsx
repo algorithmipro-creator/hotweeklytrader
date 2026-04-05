@@ -47,7 +47,13 @@ export default function DepositDetailPage() {
     { label: 'Completed', date: deposit.completed_at, completed: !!deposit.completed_at },
   ];
 
-  const isAwaitingTransfer = deposit.status === 'AWAITING_TRANSFER';
+  const showDepositAddress = ['AWAITING_TRANSFER', 'DETECTED', 'CONFIRMING', 'CONFIRMED'].includes(deposit.status);
+  const depositAddressTitle = deposit.status === 'AWAITING_TRANSFER'
+    ? `Send ${deposit.asset_symbol} to this address`
+    : `Deposit address for ${deposit.asset_symbol}`;
+  const depositAddressHint = deposit.status === 'AWAITING_TRANSFER'
+    ? `Network: ${deposit.network} - Send only ${deposit.asset_symbol} on ${deposit.network} network`
+    : `Network: ${deposit.network} - Use this address for the current deposit until it becomes active`;
 
   return (
     <div className="p-4">
@@ -56,11 +62,11 @@ export default function DepositDetailPage() {
         <StatusBadge status={deposit.status} />
       </div>
 
-      {isAwaitingTransfer && deposit.deposit_address && (
+      {showDepositAddress && deposit.deposit_address && (
         <div className="bg-bg-secondary rounded-lg p-4 mb-4 border-2 border-primary/30">
-          <h2 className="font-medium mb-2 text-primary">Send {deposit.asset_symbol} to this address</h2>
+          <h2 className="font-medium mb-2 text-primary">{depositAddressTitle}</h2>
           <p className="text-text-secondary text-xs mb-3">
-            Network: {deposit.network} — Send only {deposit.asset_symbol} on {deposit.network} network
+            {depositAddressHint}
           </p>
           <div className="bg-bg-tertiary rounded-lg p-3 flex items-center justify-between gap-2">
             <span className="font-mono text-xs text-link break-all">{deposit.deposit_address}</span>
@@ -68,11 +74,11 @@ export default function DepositDetailPage() {
               onClick={copyAddress}
               className="shrink-0 px-3 py-1.5 bg-primary text-primary-text rounded-lg text-xs font-medium"
             >
-              {copied ? '✅ Copied' : '📋 Copy'}
+              {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
           <p className="text-text-secondary text-xs mt-3">
-            ⚠️ Send only {deposit.asset_symbol} via {deposit.network} network. Sending other tokens may result in loss of funds.
+            Send only {deposit.asset_symbol} via {deposit.network} network. Sending other tokens may result in loss of funds.
           </p>
         </div>
       )}
