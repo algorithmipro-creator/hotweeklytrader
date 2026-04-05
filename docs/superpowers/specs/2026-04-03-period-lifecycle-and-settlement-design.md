@@ -194,14 +194,15 @@ Recommended payout item fields:
 - `completed_at`
 - `failure_reason`
 
-Suggested payout item statuses:
+Implemented payout item statuses:
 
-- `PENDING`
-- `READY`
+- `PREPARED`
+- `PENDING_APPROVAL`
+- `APPROVED`
 - `SENT`
+- `CONFIRMED`
 - `FAILED`
-- `MANUAL`
-- `COMPLETED`
+- `CANCELLED`
 
 ## Admin Experience
 
