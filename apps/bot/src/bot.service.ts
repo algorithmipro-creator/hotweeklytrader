@@ -10,13 +10,19 @@ type MyContext = Context & SessionFlavor<SessionData>;
 
 export class BotService {
   private bot: Bot<MyContext>;
+  private adminAppUrl?: string;
+  private adminTelegramIds: Set<number>;
 
   constructor(
     private token: string,
     private miniAppUrl: string,
+    adminAppUrl?: string,
+    adminTelegramIds: number[] = [],
   ) {
     this.bot = new Bot<MyContext>(token);
     this.bot.use(session({ initial: (): SessionData => ({ telegramId: 0 }) }));
+    this.adminAppUrl = adminAppUrl;
+    this.adminTelegramIds = new Set(adminTelegramIds);
   }
 
   async start(): Promise<void> {
@@ -37,16 +43,16 @@ export class BotService {
       ctx.session.username = ctx.from?.username;
 
       const keyboard = new InlineKeyboard()
-        .webApp('\uD83D\uDCCA Open Mini App', this.miniAppUrl)
+        .webApp('📊 Open Mini App', this.miniAppUrl)
         .row()
-        .text('\u2753 FAQ', 'faq')
-        .text('\uD83C\uDD98 Support', 'support');
+        .text('❓ FAQ', 'faq')
+        .text('🆘 Support', 'support');
 
       await ctx.reply(
         `Welcome to the Investment Service!\n\n` +
-        `\u2022 Create deposits and track their status\n` +
-        `\u2022 View reports and payout history\n` +
-        `\u2022 Get notifications for important events\n\n` +
+        `• Create deposits and track their status\n` +
+        `• View reports and payout history\n` +
+        `• Get notifications for important events\n\n` +
         `Tap the button below to get started:`,
         { reply_markup: keyboard },
       );
@@ -54,21 +60,42 @@ export class BotService {
 
     this.bot.command('menu', async (ctx) => {
       const keyboard = new InlineKeyboard()
-        .webApp('\uD83D\uDCCA Open Mini App', this.miniAppUrl)
+        .webApp('📊 Open Mini App', this.miniAppUrl)
         .row()
-        .text('\u2753 FAQ', 'faq')
-        .text('\uD83C\uDD98 Support', 'support');
+        .text('❓ FAQ', 'faq')
+        .text('🆘 Support', 'support');
 
       await ctx.reply('Main menu:', { reply_markup: keyboard });
     });
 
     this.bot.command('help', async (ctx) => {
+      const isAdmin = this.isAdmin(ctx.from?.id || 0);
       await ctx.reply(
         `Available commands:\n` +
-        `/start \u2014 Start the bot\n` +
-        `/menu \u2014 Show main menu\n` +
-        `/help \u2014 Show this help`,
+        `/start — Start the bot\n` +
+        `/menu — Show main menu\n` +
+        `/help — Show this help` +
+        (isAdmin ? `\n/admin — Open admin panel` : ''),
       );
+    });
+
+    this.bot.command('admin', async (ctx) => {
+      const telegramId = ctx.from?.id || 0;
+
+      if (!this.isAdmin(telegramId)) {
+        await ctx.reply('Access denied.');
+        return;
+      }
+
+      if (!this.adminAppUrl) {
+        await ctx.reply('Admin panel URL is not configured.');
+        return;
+      }
+
+      const keyboard = new InlineKeyboard().webApp('🛠 Open Admin Panel', this.adminAppUrl);
+      await ctx.reply('Admin access granted. Open the admin panel below:', {
+        reply_markup: keyboard,
+      });
     });
   }
 
@@ -109,7 +136,7 @@ export class BotService {
 
     this.bot.on('message:text', async (ctx) => {
       const keyboard = new InlineKeyboard()
-        .webApp('\uD83D\uDCCA Open Mini App', this.miniAppUrl);
+        .webApp('📊 Open Mini App', this.miniAppUrl);
 
       await ctx.reply(
         `I didn't understand that. Use /menu to see available options.`,
@@ -131,5 +158,9 @@ export class BotService {
         console.error(`Failed to send notification to ${telegramId}:`, error);
       }
     }
+  }
+
+  private isAdmin(telegramId: number): boolean {
+    return this.adminTelegramIds.has(telegramId);
   }
 }
