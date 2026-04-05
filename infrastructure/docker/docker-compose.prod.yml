@@ -109,6 +109,8 @@ services:
       TELEGRAM_BOT_NAME: ${TELEGRAM_BOT_NAME}
       API_BASE_URL: http://api:3000/api/v1
       MINI_APP_URL: ${MINI_APP_URL}
+      ADMIN_APP_URL: ${ADMIN_APP_URL}
+      ADMIN_TELEGRAM_IDS: ${ADMIN_TELEGRAM_IDS}
     depends_on:
       - api
     restart: unless-stopped
