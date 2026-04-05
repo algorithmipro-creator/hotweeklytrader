@@ -3,6 +3,13 @@ import axios from 'axios';
 const ADMIN_LOGIN_PATH = '/login';
 const API_BASE_URL = 'https://hotweeklytrader.duckdns.org/api/v1';
 
+export function clearAdminSession() {
+  if (typeof window === 'undefined') return;
+
+  localStorage.removeItem('admin_token');
+  localStorage.removeItem('auth_token');
+}
+
 function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;
 
@@ -37,7 +44,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
-      localStorage.removeItem('admin_token');
+      clearAdminSession();
       window.location.href = ADMIN_LOGIN_PATH;
     }
     return Promise.reject(error);

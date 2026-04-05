@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { adminLogin, getProfile } from '../lib/api';
+import { adminLogin, clearAdminSession, getProfile } from '../lib/api';
 import { useRouter, usePathname } from 'next/navigation';
 import { waitForTelegramInitData } from '../lib/telegram';
 
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     bootstrapAuth()
       .catch(() => {
-        localStorage.removeItem('admin_token');
+        clearAdminSession();
       })
       .finally(() => {
         const token = localStorage.getItem('admin_token');
@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           })
           .catch(() => {
-            localStorage.removeItem('admin_token');
+            clearAdminSession();
             if (pathname !== ADMIN_LOGIN_PATH) {
               router.push(ADMIN_LOGIN_PATH);
             }
@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [pathname, router]);
 
   const logout = () => {
-    localStorage.removeItem('admin_token');
+    clearAdminSession();
     setUser(null);
     router.push(ADMIN_LOGIN_PATH);
   };
