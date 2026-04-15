@@ -20,6 +20,10 @@ describe('TonUsdtWatcherService', () => {
       findMany: jest.fn(),
       update: jest.fn(),
     },
+    transactionLog: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+    },
     user: {
       findUnique: jest.fn(),
     },
@@ -341,6 +345,61 @@ describe('TonUsdtWatcherService', () => {
       data: expect.objectContaining({
         tx_hash: 'memo-ton-tx-2',
         confirmed_amount: '9.968',
+      }),
+    });
+  });
+
+  it('records a TON transaction log when a memo-routed transfer is detected', async () => {
+    const userSourceAddress = 'UQBURPCkGRJDaQiYF_e9v1WGCEKx7lbcxg_-hNaa_tn5Aw2U';
+    const exchangeSourceAddress = 'UQAbcEXCHANGEsharedWallet33333333333333333333333';
+
+    mockPrisma.deposit.findMany.mockResolvedValue([
+      {
+        deposit_id: 'memo-log-deposit',
+        user_id: 'user-5',
+        source_address: userSourceAddress,
+        ton_deposit_memo: 'TWLOGA315C98343E3841391AD3D63EB89',
+        status: 'AWAITING_TRANSFER',
+        created_at: new Date('2026-04-15T14:16:47.051Z'),
+        tx_hash: null,
+      },
+    ]);
+    mockPrisma.deposit.update.mockResolvedValue({});
+    mockPrisma.transactionLog.findFirst.mockResolvedValue(null);
+    mockPrisma.transactionLog.create.mockResolvedValue({});
+    mockPrisma.user.findUnique.mockResolvedValue({ user_id: 'user-5' });
+    mockDepositsService.transition.mockResolvedValue({});
+    mockNotificationsService.send.mockResolvedValue({});
+
+    jest.spyOn(service as any, 'fetchCurrentMasterchainSeqno').mockResolvedValue(120);
+    jest.spyOn(service as any, 'fetchRecentUsdtTransfers').mockResolvedValue([
+      {
+        source: exchangeSourceAddress,
+        destination: 'UQBRa_O3tTbTJK214M3LBXiQelZS9F-IpNesIysbi0B8QB8a',
+        amount: '9968000',
+        jetton_master: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+        transaction_hash: 'memo-ton-log-tx',
+        transaction_lt: '4000',
+        transaction_now: 1776263013,
+      },
+    ]);
+    (service as any).fetchTransactionMemo = jest.fn().mockResolvedValue('TWLOGA315C98343E3841391AD3D63EB89');
+    jest.spyOn(service as any, 'fetchTransactionMcSeqno').mockResolvedValue(114);
+
+    await (service as any).poll();
+
+    expect(mockPrisma.transactionLog.findFirst).toHaveBeenCalledWith({
+      where: { tx_hash: 'memo-ton-log-tx', network: 'TON' },
+    });
+    expect(mockPrisma.transactionLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        direction: 'inbound',
+        network: 'TON',
+        asset_symbol: 'USDT',
+        tx_hash: 'memo-ton-log-tx',
+        amount: '9.968',
+        status: 'confirmed',
+        source_system: 'blockchain-watcher',
       }),
     });
   });

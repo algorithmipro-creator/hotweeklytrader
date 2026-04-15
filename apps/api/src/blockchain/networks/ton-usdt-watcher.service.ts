@@ -177,7 +177,7 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
         const confirmations =
           txMasterchainSeqno > 0 ? Math.max(currentMasterchainSeqno - txMasterchainSeqno, 0) : 0;
 
-        await this.processDetectedTransfer({
+        const onChainTransaction = {
           txHash: transfer.transaction_hash,
           blockNumber: txMasterchainSeqno,
           fromAddress,
@@ -189,7 +189,10 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
           network: 'TON',
           memo: normalizedMemo || undefined,
           rawPayload: JSON.stringify({ ...transfer, memo: normalizedMemo || undefined }),
-        });
+        };
+
+        await this.recordTransactionLog(onChainTransaction);
+        await this.processDetectedTransfer(onChainTransaction);
 
         if (shouldAdvanceCursor) {
           this.lastSeenLt = transferLt > this.lastSeenLt ? transferLt : this.lastSeenLt;
@@ -355,6 +358,32 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
 
     const fractionText = fraction.toString().padStart(TON_DECIMALS, '0').replace(/0+$/, '');
     return `${whole.toString()}.${fractionText}`;
+  }
+
+  private async recordTransactionLog(tx: OnChainTransaction): Promise<void> {
+    const existing = await this.prisma.transactionLog.findFirst({
+      where: { tx_hash: tx.txHash, network: tx.network },
+    });
+
+    if (existing) {
+      return;
+    }
+
+    await this.prisma.transactionLog.create({
+      data: {
+        direction: 'inbound',
+        network: tx.network,
+        asset_symbol: tx.tokenSymbol,
+        tx_hash: tx.txHash,
+        from_address: tx.fromAddress,
+        to_address: tx.toAddress,
+        amount: tx.amount,
+        confirmations: tx.confirmations,
+        status: tx.confirmations > 0 ? 'confirmed' : 'pending',
+        raw_payload_reference: tx.rawPayload || null,
+        source_system: 'blockchain-watcher',
+      },
+    });
   }
 
   private async processDetectedTransfer(tx: OnChainTransaction): Promise<void> {
