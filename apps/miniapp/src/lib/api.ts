@@ -15,8 +15,11 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export async function authenticateTelegram(initData: string) {
-  const response = await api.post('/auth/telegram', { initData });
+export async function authenticateTelegram(initData: string, referralCode?: string | null) {
+  const response = await api.post('/auth/telegram', {
+    initData,
+    referralCode: referralCode ?? undefined,
+  });
   if (response.data.accessToken) {
     localStorage.setItem('auth_token', response.data.accessToken);
   }
@@ -25,6 +28,26 @@ export async function authenticateTelegram(initData: string) {
 
 export async function getProfile() {
   const response = await api.get('/me');
+  return response.data;
+}
+
+export async function getReferralProfile() {
+  const response = await api.get('/me/referral');
+  return response.data;
+}
+
+export async function getReferralTeam() {
+  const response = await api.get('/me/team');
+  return response.data;
+}
+
+export async function getTraders() {
+  const response = await api.get('/traders');
+  return response.data;
+}
+
+export async function getTrader(slug: string) {
+  const response = await api.get(`/traders/${slug}`);
   return response.data;
 }
 
@@ -40,12 +63,29 @@ export async function getDeposit(id: string) {
 
 export async function createDeposit(data: {
   investment_period_id: string;
+  trader_id: string;
   network: string;
   asset_symbol: string;
   source_address: string;
+  return_address?: string;
+  ton_deposit_memo?: string;
+  return_memo?: string;
   requested_amount?: number;
+  settlement_preference?: string;
 }) {
   const response = await api.post('/deposits', data);
+  return response.data;
+}
+
+export async function updateDepositSettlementPreference(depositId: string, settlementPreference: string) {
+  const response = await api.put(`/deposits/${depositId}/settlement-preference`, {
+    settlement_preference: settlementPreference,
+  });
+  return response.data;
+}
+
+export async function cancelDeposit(depositId: string) {
+  const response = await api.put(`/deposits/${depositId}/cancel`);
   return response.data;
 }
 
