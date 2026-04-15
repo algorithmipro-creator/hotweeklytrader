@@ -1,46 +1,52 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Address } from '@ton/core';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDepositDto, DepositDto, DepositStatus } from './dto/deposit.dto';
 import { DepositStateMachine } from './deposit-state-machine';
 import { randomUUID } from 'crypto';
-import { InvestmentPeriodStatus } from '@prisma/client';
-import { Address } from '@ton/core';
+import { TradersService } from '../traders/traders.service';
+import { WalletsService } from '../wallets/wallets.service';
+import { buildUserTonDepositMemo } from '../common/ton-memo.util';
+import {
+  DEFAULT_SETTLEMENT_PREFERENCE,
+  normalizeSettlementPreference,
+} from '../common/settlement-preference.util';
+
+const MAX_DEPOSITS_PER_USER_PER_PERIOD = 10;
 
 @Injectable()
 export class DepositsService {
+  private readonly logger = new Logger(DepositsService.name);
+
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private tradersService: TradersService,
+    private walletsService: WalletsService,
   ) {}
 
   async findByUser(userId: string): Promise<DepositDto[]> {
     const deposits = await this.prisma.deposit.findMany({
       where: { user_id: userId },
+      include: {
+        trader_main_address: true,
+      },
       orderBy: { created_at: 'desc' },
     });
 
-    return deposits.map((deposit: any) => this.serialize(deposit));
+    return deposits.map((deposit) => this.serialize(deposit));
   }
 
   async findOne(depositId: string, userId: string): Promise<DepositDto> {
     const deposit = await this.prisma.deposit.findUnique({
       where: { deposit_id: depositId },
+      include: {
+        trader_main_address: true,
+      },
     });
 
     if (!deposit || deposit.user_id !== userId) {
-      throw new NotFoundException('Deposit not found');
-    }
-
-    return this.serialize(deposit);
-  }
-
-  async findAdminOne(depositId: string): Promise<DepositDto> {
-    const deposit = await this.prisma.deposit.findUnique({
-      where: { deposit_id: depositId },
-    });
-
-    if (!deposit) {
       throw new NotFoundException('Deposit not found');
     }
 
@@ -56,7 +62,7 @@ export class DepositsService {
       throw new NotFoundException('Investment period not found');
     }
 
-    if (period.status !== InvestmentPeriodStatus.FUNDING) {
+    if (period.status !== 'ACTIVE' && period.status !== 'DRAFT') {
       throw new BadRequestException('Investment period is not accepting deposits');
     }
 
@@ -68,37 +74,145 @@ export class DepositsService {
       throw new BadRequestException(`Asset ${dto.asset_symbol} is not supported for this network`);
     }
 
-    const normalizedSourceAddress = this.normalizeSourceAddress(dto.network, dto.source_address);
-    const existingPendingDeposit = await this.prisma.deposit.findFirst({
+    const normalizedSourceAddress = this.normalizeAddress(dto.network, dto.source_address);
+    const sourceAddressDisplay = this.normalizeDisplayAddress(dto.network, dto.source_address);
+    const normalizedReturnAddress = dto.return_address
+      ? this.normalizeAddress(dto.network, dto.return_address)
+      : null;
+    const returnAddressDisplay = dto.return_address
+      ? this.normalizeDisplayAddress(dto.network, dto.return_address)
+      : null;
+    const mainAddress = await this.tradersService.resolveMainAddress(
+      dto.trader_id,
+      dto.network,
+      dto.asset_symbol,
+    );
+    const depositCountForPeriod = await this.prisma.deposit.count({
       where: {
-        network: dto.network,
-        source_address: normalizedSourceAddress,
-        status: { in: ['AWAITING_TRANSFER', 'DETECTED', 'CONFIRMING'] },
+        user_id: userId,
+        investment_period_id: dto.investment_period_id,
       },
     });
 
-    if (existingPendingDeposit) {
-      throw new BadRequestException('A pending deposit already exists for this source address on this network');
+    if (depositCountForPeriod >= MAX_DEPOSITS_PER_USER_PER_PERIOD) {
+      throw new BadRequestException(
+        `You have reached the limit of ${MAX_DEPOSITS_PER_USER_PER_PERIOD} cycles for this period`,
+      );
+    }
+
+    try {
+      await this.walletsService.findOrCreate(userId, dto.network, dto.source_address, 'SOURCE');
+
+      if (dto.return_address) {
+        await this.walletsService.findOrCreate(
+          userId,
+          dto.network,
+          dto.return_address,
+          'RETURNING',
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Deposit create wallet conflict user=${userId} network=${dto.network} source=${normalizedSourceAddress} return=${normalizedReturnAddress ?? 'null'} source_input=${dto.source_address} return_input=${dto.return_address ?? 'null'} error=${message}`,
+      );
+      throw error;
     }
 
     const depositRoute = `dr_${randomUUID().replace(/-/g, '')}`;
     const routeExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const settlementPreference = normalizeSettlementPreference(dto.settlement_preference);
+    const tonDepositMemo = dto.network === 'TON'
+      ? buildUserTonDepositMemo(userId)
+      : dto.ton_deposit_memo?.trim() || null;
 
     const deposit = await this.prisma.deposit.create({
       data: {
         user_id: userId,
         investment_period_id: dto.investment_period_id,
+        trader_id: dto.trader_id,
+        trader_main_address_id: mainAddress.trader_main_address_id,
         network: dto.network,
         asset_symbol: dto.asset_symbol,
         source_address: normalizedSourceAddress,
+        source_address_display: sourceAddressDisplay,
+        return_address: normalizedReturnAddress,
+        return_address_display: returnAddressDisplay,
+        ton_deposit_memo: tonDepositMemo,
+        return_memo: dto.return_memo?.trim() || null,
+        settlement_preference: settlementPreference,
         deposit_route: depositRoute,
         requested_amount: dto.requested_amount ? dto.requested_amount.toString() : null,
         route_expires_at: routeExpiresAt,
         status: DepositStatus.AWAITING_TRANSFER,
+      } as any,
+      include: {
+        trader_main_address: true,
       },
     });
 
     return this.serialize(deposit);
+  }
+
+  async cancelByUser(depositId: string, userId: string): Promise<DepositDto> {
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { deposit_id: depositId },
+      include: {
+        trader_main_address: true,
+      },
+    });
+
+    if (!deposit || deposit.user_id !== userId) {
+      throw new NotFoundException('Deposit not found');
+    }
+
+    if (deposit.status !== DepositStatus.AWAITING_TRANSFER) {
+      throw new BadRequestException('Only awaiting-transfer deposits can be cancelled by the user');
+    }
+
+    const cancelled = await this.prisma.deposit.update({
+      where: { deposit_id: depositId },
+      data: {
+        status: DepositStatus.CANCELLED,
+        status_reason: 'Cancelled by user before transfer',
+        cancelled_at: new Date(),
+      },
+      include: {
+        trader_main_address: true,
+      },
+    });
+
+    return this.serialize(cancelled);
+  }
+
+  async updateSettlementPreference(
+    depositId: string,
+    userId: string,
+    settlementPreference?: string | null,
+  ): Promise<DepositDto> {
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { deposit_id: depositId },
+    });
+
+    if (!deposit || deposit.user_id !== userId) {
+      throw new NotFoundException('Deposit not found');
+    }
+
+    if (this.isSettlementLocked(deposit.status)) {
+      throw new BadRequestException('Settlement preference can no longer be updated for this deposit');
+    }
+
+    const updated = await this.prisma.deposit.update({
+      where: { deposit_id: depositId },
+      data: {
+        settlement_preference: normalizeSettlementPreference(settlementPreference),
+      } as any,
+      include: {
+        trader_main_address: true,
+      },
+    });
+
+    return this.serialize(updated);
   }
 
   async transition(depositId: string, toStatus: string, reason?: string): Promise<DepositDto> {
@@ -141,6 +255,9 @@ export class DepositsService {
   async findOneByRoute(route: string): Promise<DepositDto | null> {
     const deposit = await this.prisma.deposit.findUnique({
       where: { deposit_route: route },
+      include: {
+        trader_main_address: true,
+      },
     });
 
     if (!deposit) return null;
@@ -152,11 +269,32 @@ export class DepositsService {
       deposit_id: deposit.deposit_id,
       user_id: deposit.user_id,
       investment_period_id: deposit.investment_period_id,
+      trader_id: deposit.trader_id ?? null,
+      trader_main_address_id: deposit.trader_main_address_id ?? null,
       network: deposit.network,
       asset_symbol: deposit.asset_symbol,
       deposit_route: deposit.deposit_route,
-      deposit_address: this.getDepositAddress(deposit.network),
-      source_address: deposit.source_address,
+      deposit_address: deposit.trader_main_address?.address || this.getDepositAddress(deposit.network),
+      source_address: this.getDisplayAddress(
+        deposit.network,
+        deposit.source_address,
+        deposit.source_address_display,
+      ),
+      return_address: this.getDisplayAddress(
+        deposit.network,
+        deposit.return_address,
+        deposit.return_address_display,
+      ),
+      ton_deposit_memo: deposit.ton_deposit_memo ?? null,
+      return_memo: deposit.return_memo ?? null,
+      settlement_preference: normalizeSettlementPreference(deposit.settlement_preference ?? DEFAULT_SETTLEMENT_PREFERENCE),
+      auto_renew_trader_id_snapshot: deposit.auto_renew_trader_id_snapshot ?? null,
+      auto_renew_network_snapshot: deposit.auto_renew_network_snapshot ?? null,
+      auto_renew_asset_symbol_snapshot: deposit.auto_renew_asset_symbol_snapshot ?? null,
+      rolled_over_into_deposit_id: deposit.rolled_over_into_deposit_id ?? null,
+      rollover_source_deposit_id: deposit.rollover_source_deposit_id ?? null,
+      rollover_attempted_at: deposit.rollover_attempted_at?.toISOString() || null,
+      rollover_block_reason: deposit.rollover_block_reason ?? null,
       tx_hash: deposit.tx_hash,
       requested_amount: deposit.requested_amount ? parseFloat(deposit.requested_amount.toString()) : null,
       confirmed_amount: deposit.confirmed_amount ? parseFloat(deposit.confirmed_amount.toString()) : null,
@@ -173,31 +311,66 @@ export class DepositsService {
     };
   }
 
+  private isSettlementLocked(status: string): boolean {
+    return ['REPORT_READY', 'PAYOUT_PENDING', 'PAYOUT_APPROVED', 'PAYOUT_SENT', 'PAYOUT_CONFIRMED'].includes(status);
+  }
+
   private getDepositAddress(network: string): string {
-    if (network === 'BSC') {
-      return this.configService.get<string>('blockchain.bsc.depositAddress') || '';
+    switch (network) {
+      case 'BSC':
+        return this.configService.get<string>('blockchain.bsc.depositAddress') || '0x1fFFbcda5bB208CbAd95882a9e57FA9354533AaC';
+      case 'TRON':
+        return this.configService.get<string>('blockchain.tron.depositAddress') || '';
+      case 'TON':
+        return this.configService.get<string>('blockchain.ton.depositAddress') || '';
+      default:
+        return '';
+    }
+  }
+
+  private normalizeAddress(network: string, address: string): string {
+    const trimmed = address.trim();
+    if (network === 'TON') {
+      try {
+        return Address.parse(trimmed).toRawString().toLowerCase();
+      } catch {
+        return trimmed;
+      }
     }
 
-    if (network === 'TRON') {
-      return this.configService.get<string>('blockchain.tron.depositAddress') || '';
+    return trimmed.toLowerCase();
+  }
+
+  private normalizeDisplayAddress(network: string, address: string): string {
+    const trimmed = address.trim();
+    if (trimmed.length === 0) {
+      return trimmed;
+    }
+
+    return network === 'TON' ? trimmed : trimmed;
+  }
+
+  private getDisplayAddress(
+    network: string,
+    rawAddress?: string | null,
+    displayAddress?: string | null,
+  ): string | null {
+    if (!rawAddress) {
+      return null;
+    }
+
+    if (displayAddress) {
+      return displayAddress;
     }
 
     if (network === 'TON') {
-      return this.configService.get<string>('blockchain.ton.depositAddress') || '';
+      try {
+        return Address.parse(rawAddress).toString();
+      } catch {
+        return rawAddress;
+      }
     }
 
-    return '';
-  }
-
-  private normalizeSourceAddress(network: string, sourceAddress: string): string {
-    if (network !== 'TON') {
-      return sourceAddress.toLowerCase();
-    }
-
-    try {
-      return Address.parse(sourceAddress).toRawString().toLowerCase();
-    } catch {
-      return sourceAddress.trim();
-    }
+    return rawAddress;
   }
 }
