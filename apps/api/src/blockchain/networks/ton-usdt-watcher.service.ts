@@ -16,8 +16,8 @@ type TonJettonTransfer = {
   amount: string;
   destination: string;
   jetton_master: string;
+  memo?: string;
   source: string;
-  source_user_friendly?: string;
   transaction_hash: string;
   transaction_lt: string;
   transaction_now: number;
@@ -130,11 +130,16 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
 
       const trackedAddresses = new Set(
         deposits
-          .flatMap((deposit: any) => this.getAddressKeys(deposit.source_address || ''))
-          .filter((address: string): address is string => Boolean(address)),
+          .map((deposit) => this.normalizeAddress(deposit.source_address || ''))
+          .filter((address): address is string => Boolean(address)),
+      );
+      const trackedMemos = new Set(
+        deposits
+          .map((deposit) => (deposit.ton_deposit_memo || '').trim())
+          .filter((memo): memo is string => Boolean(memo)),
       );
 
-      if (trackedAddresses.size === 0) return;
+      if (trackedAddresses.size === 0 && trackedMemos.size === 0) return;
 
       const sinceTimestamp = this.getEarliestCreatedAtUnix(deposits);
       const currentMasterchainSeqno = await this.fetchCurrentMasterchainSeqno();
@@ -146,9 +151,16 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
           continue;
         }
 
-        const transferSourceKeys = this.getTransferSourceKeys(transfer);
         const fromAddress = this.normalizeAddress(transfer.source || '');
-        if (!transferSourceKeys.some((key) => trackedAddresses.has(key))) {
+        const sourceTracked = trackedAddresses.has(fromAddress);
+        const transferMemo = (transfer.memo || '').trim();
+        const enrichedMemo = transferMemo || (!sourceTracked && trackedMemos.size > 0
+          ? await this.fetchTransactionMemo(transfer.transaction_hash)
+          : '');
+        const normalizedMemo = enrichedMemo.trim();
+        const memoTracked = normalizedMemo ? trackedMemos.has(normalizedMemo) : false;
+
+        if (!sourceTracked && !memoTracked) {
           this.lastSeenLt = transferLt > this.lastSeenLt ? transferLt : this.lastSeenLt;
           continue;
         }
@@ -165,21 +177,19 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
         const confirmations =
           txMasterchainSeqno > 0 ? Math.max(currentMasterchainSeqno - txMasterchainSeqno, 0) : 0;
 
-        await this.processDetectedTransfer(
-          {
-            txHash: transfer.transaction_hash,
-            blockNumber: txMasterchainSeqno,
-            fromAddress,
-            toAddress: this.depositAddress,
-            amount: this.formatTokenAmount(transfer.amount),
-            tokenSymbol: 'USDT',
-            confirmations,
-            timestamp: new Date((transfer.transaction_now || Math.floor(Date.now() / 1000)) * 1000),
-            network: 'TON',
-            rawPayload: JSON.stringify(transfer),
-          },
-          transferSourceKeys,
-        );
+        await this.processDetectedTransfer({
+          txHash: transfer.transaction_hash,
+          blockNumber: txMasterchainSeqno,
+          fromAddress,
+          toAddress: this.depositAddress,
+          amount: this.formatTokenAmount(transfer.amount),
+          tokenSymbol: 'USDT',
+          confirmations,
+          timestamp: new Date((transfer.transaction_now || Math.floor(Date.now() / 1000)) * 1000),
+          network: 'TON',
+          memo: normalizedMemo || undefined,
+          rawPayload: JSON.stringify({ ...transfer, memo: normalizedMemo || undefined }),
+        });
 
         if (shouldAdvanceCursor) {
           this.lastSeenLt = transferLt > this.lastSeenLt ? transferLt : this.lastSeenLt;
@@ -210,20 +220,14 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
         throw new Error(`TON Center returned ${response.status}`);
       }
 
-      const payload = (await response.json()) as {
-        jetton_transfers?: TonJettonTransfer[];
-        address_book?: Record<string, { user_friendly?: string }>;
-      };
+      const payload = (await response.json()) as { jetton_transfers?: TonJettonTransfer[] };
       const batch = payload.jetton_transfers || [];
       transfers.push(
         ...batch.filter(
           (transfer) =>
             this.normalizeAddress(transfer.destination || '') === this.normalizedDepositAddress &&
             this.normalizeAddress(transfer.jetton_master || '') === this.normalizedUsdtMasterAddress,
-        ).map((transfer) => ({
-          ...transfer,
-          source_user_friendly: payload.address_book?.[transfer.source || '']?.user_friendly,
-        })),
+        ),
       );
 
       if (batch.length < TON_POLL_LIMIT) {
@@ -234,6 +238,40 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
     }
 
     return transfers;
+  }
+
+  private async fetchTransactionMemo(txHash: string): Promise<string> {
+    if (!txHash) return '';
+
+    const url = new URL('/api/v3/transactions', this.rpcUrl);
+    url.searchParams.set('hash', txHash);
+    url.searchParams.set('limit', '1');
+
+    const response = await fetch(url.toString(), { headers: this.buildHeaders() });
+    if (!response.ok) {
+      throw new Error(`TON transaction memo request failed with ${response.status}`);
+    }
+
+    const payload = (await response.json()) as {
+      transactions?: Array<{
+        in_msg?: {
+          message_content?: {
+            decoded?: {
+              forward_payload?: {
+                value?: {
+                  text?: string;
+                };
+                text?: string;
+              };
+            };
+          };
+        };
+      }>;
+    };
+
+    const decoded = payload.transactions?.[0]?.in_msg?.message_content?.decoded;
+    const memo = decoded?.forward_payload?.value?.text || decoded?.forward_payload?.text || '';
+    return typeof memo === 'string' ? memo.trim() : '';
   }
 
   private async fetchCurrentMasterchainSeqno(): Promise<number> {
@@ -319,7 +357,7 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
     return `${whole.toString()}.${fractionText}`;
   }
 
-  private async processDetectedTransfer(tx: OnChainTransaction, sourceKeys?: string[]): Promise<void> {
+  private async processDetectedTransfer(tx: OnChainTransaction): Promise<void> {
     const candidateDeposits = await this.prisma.deposit.findMany({
       where: {
         network: tx.network,
@@ -329,7 +367,7 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
     });
     const deposits =
       tx.network === 'TON'
-        ? this.pickTonDepositsForTransaction(candidateDeposits, tx, sourceKeys)
+        ? this.pickTonDepositsForTransaction(candidateDeposits, tx)
         : candidateDeposits;
 
     for (const deposit of deposits) {
@@ -406,27 +444,50 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
     }
   }
 
-  private pickTonDepositsForTransaction(candidateDeposits: any[], tx: OnChainTransaction, sourceKeys?: string[]): any[] {
-    const resolvedSourceKeys = sourceKeys && sourceKeys.length > 0 ? sourceKeys : this.getAddressKeys(tx.fromAddress);
-    const matchingDeposits = candidateDeposits.filter(
-      (deposit) => this.getAddressKeys(deposit.source_address || '').some((key) => resolvedSourceKeys.includes(key)),
+  private pickTonDepositsForTransaction(candidateDeposits: any[], tx: OnChainTransaction): any[] {
+    const matchingDeposit = this.matchTransferToDeposit(tx as OnChainTransaction & { memo?: string }, candidateDeposits);
+    return matchingDeposit ? [matchingDeposit] : [];
+  }
+
+  private matchTransferToDeposit(
+    tx: OnChainTransaction & { memo?: string },
+    candidateDeposits: any[],
+  ): any | null {
+    const normalizedSourceAddress = this.normalizeAddress(tx.fromAddress);
+    const normalizedMemo = (tx.memo || '').trim();
+    const sourceMatches = candidateDeposits.filter(
+      (deposit) => this.normalizeAddress(deposit.source_address || '') === normalizedSourceAddress,
     );
 
-    if (matchingDeposits.length <= 1) {
-      return matchingDeposits;
+    if (normalizedMemo) {
+      const memoMatches = sourceMatches.filter((deposit) => (deposit.ton_deposit_memo || '').trim() === normalizedMemo);
+      if (memoMatches.length > 0) {
+        return this.sortDepositsByRecency(memoMatches)[0];
+      }
+
+      const fallbackMemoMatches = candidateDeposits.filter(
+        (deposit) => (deposit.ton_deposit_memo || '').trim() === normalizedMemo,
+      );
+      if (fallbackMemoMatches.length > 0) {
+        return this.sortDepositsByRecency(fallbackMemoMatches)[0];
+      }
     }
 
-    const bySameTxHash = matchingDeposits.filter((deposit) => deposit.tx_hash === tx.txHash);
+    if (sourceMatches.length <= 1) {
+      return sourceMatches[0] || null;
+    }
+
+    const bySameTxHash = sourceMatches.filter((deposit) => deposit.tx_hash === tx.txHash);
     if (bySameTxHash.length > 0) {
-      return [this.sortDepositsByRecency(bySameTxHash)[0]];
+      return this.sortDepositsByRecency(bySameTxHash)[0];
     }
 
-    const awaitingTransfer = matchingDeposits.filter((deposit) => deposit.status === 'AWAITING_TRANSFER');
+    const awaitingTransfer = sourceMatches.filter((deposit) => deposit.status === 'AWAITING_TRANSFER');
     if (awaitingTransfer.length > 0) {
-      return [this.sortDepositsByRecency(awaitingTransfer)[0]];
+      return this.sortDepositsByRecency(awaitingTransfer)[0];
     }
 
-    return [this.sortDepositsByRecency(matchingDeposits)[0]];
+    return this.sortDepositsByRecency(sourceMatches)[0] || null;
   }
 
   private sortDepositsByRecency(deposits: any[]): any[] {
@@ -435,27 +496,5 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
       const rightTime = new Date(right.created_at || 0).getTime();
       return rightTime - leftTime;
     });
-  }
-
-  private getTransferSourceKeys(transfer: TonJettonTransfer): string[] {
-    return this.getAddressKeys(transfer.source || '', transfer.source_user_friendly || '');
-  }
-
-  private getAddressKeys(...addresses: string[]): string[] {
-    const keys = new Set<string>();
-
-    for (const address of addresses) {
-      const trimmed = address?.trim();
-      if (!trimmed) continue;
-
-      keys.add(trimmed.toLowerCase());
-      try {
-        keys.add(Address.parse(trimmed).toRawString().toLowerCase());
-      } catch {
-        // Keep the original lower-cased form as a fallback for already persisted broken friendly addresses.
-      }
-    }
-
-    return [...keys];
   }
 }
