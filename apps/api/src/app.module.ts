@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
@@ -16,18 +17,29 @@ import { PayoutsModule } from './payouts/payouts.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SupportModule } from './support/support.module';
 import { WalletsModule } from './wallets/wallets.module';
-import { AdminModule } from './admin/admin.module';
+import { TradersModule } from './traders/traders.module';
+import { ReferralsModule } from './referrals/referrals.module';
+import { LiveMetricsModule } from './live-metrics/live-metrics.module';
+import { AdminDashboardController } from './admin/admin-dashboard.controller';
 import appConfig from './config/app.config';
 import blockchainConfig from './config/blockchain.config';
 import databaseConfig from './config/database.config';
 import telegramConfig from './config/telegram.config';
 import jwtConfig from './config/jwt.config';
+import adminConfig from './config/admin.config';
 
 @Module({
+  controllers: [AdminDashboardController],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, telegramConfig, jwtConfig, blockchainConfig],
+      load: [appConfig, databaseConfig, telegramConfig, jwtConfig, adminConfig, blockchainConfig],
     }),
     ThrottlerModule.forRoot([{
       ttl: 60000,
@@ -48,7 +60,9 @@ import jwtConfig from './config/jwt.config';
     NotificationsModule,
     SupportModule,
     WalletsModule,
-    AdminModule,
+    TradersModule,
+    ReferralsModule,
+    LiveMetricsModule,
   ],
 })
 export class AppModule {}
