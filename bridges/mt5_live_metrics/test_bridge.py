@@ -1,4 +1,7 @@
-﻿from collector import build_snapshot_payload
+from unittest.mock import patch
+
+from client import push_snapshot
+from collector import build_snapshot_payload
 
 
 def test_build_snapshot_payload_normalizes_mt5_metrics():
@@ -23,3 +26,18 @@ def test_build_snapshot_payload_normalizes_mt5_metrics():
         "raw_payload": {"account": 1001},
     }
 
+
+@patch("client.requests.post")
+def test_push_snapshot_uses_internal_secret(mock_post):
+    push_snapshot(
+        "https://example.com/api/v1",
+        "secret-123",
+        {"trader_id": "trader-1"},
+    )
+
+    mock_post.assert_called_once_with(
+        "https://example.com/api/v1/internal/trader-period-live-metrics",
+        json={"trader_id": "trader-1"},
+        headers={"x-internal-secret": "secret-123"},
+        timeout=30,
+    )
