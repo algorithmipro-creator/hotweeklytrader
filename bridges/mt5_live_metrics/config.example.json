@@ -1,0 +1,10 @@
+{
+  "mt5_login": 0,
+  "mt5_password": "replace-me",
+  "mt5_server": "Broker-Demo",
+  "backend_base_url": "https://hotweeklytrader.duckdns.org/api/v1",
+  "backend_secret": "replace-me",
+  "poll_interval_minutes": 15,
+  "trader_id": "replace-trader-id",
+  "investment_period_id": "replace-period-id"
+}
