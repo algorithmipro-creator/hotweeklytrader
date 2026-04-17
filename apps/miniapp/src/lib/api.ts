@@ -61,19 +61,38 @@ export async function getDeposit(id: string) {
   return response.data;
 }
 
+export async function getDepositLiveMetrics(depositId: string) {
+  const response = await api.get(`/deposits/${depositId}/live-metrics`);
+  return response.data;
+}
+
 export async function createDeposit(data: {
   investment_period_id: string;
   trader_id: string;
   network: string;
   asset_symbol: string;
-  source_address: string;
+  source_address?: string;
   return_address?: string;
   ton_deposit_memo?: string;
   return_memo?: string;
   requested_amount?: number;
   settlement_preference?: string;
+  sending_from_exchange?: boolean;
 }) {
   const response = await api.post('/deposits', data);
+  return response.data;
+}
+
+
+export async function updateDepositReturnRouting(
+  depositId: string,
+  data: {
+    source_address?: string;
+    return_address?: string;
+    return_memo?: string;
+  },
+) {
+  const response = await api.put(`/deposits/${depositId}/return-routing`, data);
   return response.data;
 }
 

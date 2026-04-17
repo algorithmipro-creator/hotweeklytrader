@@ -53,7 +53,7 @@ const messages: Record<Language, Messages> = {
     'status.CONFIRMING': 'Confirming',
     'status.CONFIRMED': 'Confirmed',
     'status.ACTIVE': 'Active',
-    'status.COMPLETED': 'Completed',
+    'status.COMPLETED': 'Algorithm works',
     'status.REPORT_READY': 'Report Ready',
     'status.PAYOUT_PENDING': 'Payout Pending',
     'status.PAYOUT_APPROVED': 'Payout Approved',
@@ -92,6 +92,7 @@ const messages: Record<Language, Messages> = {
     'metrics.period': 'Period',
     'metrics.assistantTrades': 'Assistant Trades',
     'metrics.winRate': 'Win Rate',
+    'metrics.emptyValue': 'No live data yet',
 
     'traders.kicker': 'Algorithm Directory',
     'traders.title': 'Choose your algorithm',
@@ -130,7 +131,8 @@ const messages: Record<Language, Messages> = {
     'depositCreate.useNewAddress': '+ Use new address',
     'depositCreate.enterWallet': 'Enter your wallet address...',
     'depositCreate.sendingFromExchange': 'Sending from exchange',
-    'depositCreate.exchangeSourceWalletHint': 'The source wallet list is disabled for TON exchange transfers. Use your exchange wallet address in the return field below.',
+    'depositCreate.exchangeSourceWalletHint': 'When sending from an exchange, specify the receiving address on the next step after the cycle is created.',
+    'depositCreate.exchangeRoutingDeferred': 'Create the cycle first, then add your exchange wallet address and TON memo on the cycle detail screen.',
     'depositCreate.returningAddress': 'Your Return Address',
     'depositCreate.exchangeReturningAddress': 'My exchange wallet address',
     'depositCreate.returningAddressHelp': 'Enter the address that should receive funds for this cycle.',
@@ -204,12 +206,19 @@ const messages: Record<Language, Messages> = {
     'depositDetail.viewPayouts': 'View Payouts',
     'depositDetail.showAddress': 'Show',
     'depositDetail.hideAddress': 'Hide',
+    'depositDetail.returnAddressForAsset': 'Your address for returning {asset}',
+    'depositDetail.changeAddress': 'Change address',
+    'depositDetail.saveAddress': 'Save address',
+    'depositDetail.savingAddress': 'Saving...',
+    'depositDetail.exchangeWalletAddress': 'Exchange wallet address',
+    'depositDetail.editAddressHelp': 'Use this section to update the return address for the cycle.',
+    'depositDetail.updateReturnRoutingFailed': 'Failed to update return routing',
     'depositDetail.notFound': 'Cycle not found',
     'depositDetail.timelineCreated': 'Cycle Created',
     'depositDetail.timelineDetected': 'Transfer Detected',
     'depositDetail.timelineConfirmed': 'Confirmed',
     'depositDetail.timelineActive': 'Active',
-    'depositDetail.timelineCompleted': 'Completed',
+    'depositDetail.timelineCompleted': 'Algorithm works',
 
     'addresses.kicker': 'Wallet Routing',
     'addresses.title': 'My Addresses',
@@ -339,7 +348,7 @@ const messages: Record<Language, Messages> = {
     'status.CONFIRMING': 'Подтверждается',
     'status.CONFIRMED': 'Подтвержден',
     'status.ACTIVE': 'Активен',
-    'status.COMPLETED': 'Завершен',
+    'status.COMPLETED': 'Алгоритм работает',
     'status.REPORT_READY': 'Отчет готов',
     'status.PAYOUT_PENDING': 'Выплата ожидается',
     'status.PAYOUT_APPROVED': 'Выплата одобрена',
@@ -475,12 +484,19 @@ const messages: Record<Language, Messages> = {
     'depositDetail.viewPayouts': 'Открыть выплаты',
     'depositDetail.showAddress': 'Показать',
     'depositDetail.hideAddress': 'Скрыть',
+    'depositDetail.returnAddressForAsset': 'Ваш адрес для возврата {asset}',
+    'depositDetail.changeAddress': 'Изменить адрес',
+    'depositDetail.saveAddress': 'Сохранить адрес',
+    'depositDetail.savingAddress': 'Сохраняем...',
+    'depositDetail.exchangeWalletAddress': 'Адрес кошелька на бирже',
+    'depositDetail.editAddressHelp': 'В этом блоке можно обновить адрес возврата по циклу.',
+    'depositDetail.updateReturnRoutingFailed': '?? ??????? ???????? ????? ????????',
     'depositDetail.notFound': 'Цикл не найден',
     'depositDetail.timelineCreated': 'Цикл создан',
     'depositDetail.timelineDetected': 'Перевод обнаружен',
     'depositDetail.timelineConfirmed': 'Подтвержден',
     'depositDetail.timelineActive': 'Активен',
-    'depositDetail.timelineCompleted': 'Завершен',
+    'depositDetail.timelineCompleted': 'Алгоритм работает',
 
     'addresses.kicker': 'Маршрутизация кошельков',
     'addresses.title': 'Мои адреса',
@@ -600,6 +616,7 @@ const messageOverrides: Record<Language, Messages> = {
     'metrics.period': 'Период',
     'metrics.assistantTrades': 'Количество сделок ассистента',
     'metrics.winRate': 'Вин рейт',
+    'metrics.emptyValue': '\u041f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0445',
     'depositDetail.viewMetrics': 'Текущие показатели',
     'home.title': 'Начните торговлю ИИ-ассистентом',
     'home.chooseLexer': 'выберите своего трейдера',
@@ -654,7 +671,7 @@ messageOverrides.ru['metrics.trader'] =
 messageOverrides.ru['depositCreate.sendingFromExchange'] =
   '\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u044e \u0441 \u0431\u0438\u0440\u0436\u0438';
 messageOverrides.ru['depositCreate.exchangeSourceWalletHint'] =
-  '\u0414\u043b\u044f TON \u043f\u0435\u0440\u0435\u0432\u043e\u0434\u043e\u0432 \u0441 \u0431\u0438\u0440\u0436\u0438 \u0441\u043f\u0438\u0441\u043e\u043a \u0438\u0441\u0445\u043e\u0434\u043d\u044b\u0445 \u043a\u043e\u0448\u0435\u043b\u044c\u043a\u043e\u0432 \u043e\u0442\u043a\u043b\u044e\u0447\u0451\u043d. \u041d\u0438\u0436\u0435 \u0443\u043a\u0430\u0436\u0438\u0442\u0435 \u0432\u0430\u0448 \u0430\u0434\u0440\u0435\u0441 \u043a\u043e\u0448\u0435\u043b\u044c\u043a\u0430 \u043d\u0430 \u0431\u0438\u0440\u0436\u0435 \u0434\u043b\u044f \u0432\u043e\u0437\u0432\u0440\u0430\u0442\u0430.';
+  '\u041f\u0440\u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0435 \u0441 \u0431\u0438\u0440\u0436\u0438 \u0443\u043a\u0430\u0436\u0438\u0442\u0435 \u0430\u0434\u0440\u0435\u0441 \u0434\u043b\u044f \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044f \u0441\u0440\u0435\u0434\u0441\u0442\u0432 \u043d\u0430 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0435\u043c \u0448\u0430\u0433\u0435 \u043f\u043e\u0441\u043b\u0435 \u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f \u0446\u0438\u043a\u043b\u0430.';
 messageOverrides.ru['depositCreate.period'] =
   '\u041f\u0435\u0440\u0438\u043e\u0434 \u0446\u0438\u043a\u043b\u0430';
 messageOverrides.ru['depositCreate.trader'] =
