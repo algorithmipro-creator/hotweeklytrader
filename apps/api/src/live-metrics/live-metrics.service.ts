@@ -45,4 +45,43 @@ export class LiveMetricsService {
       raw_payload: snapshot.raw_payload ?? undefined,
     };
   }
+
+  async getSnapshotForDeposit(depositId: string) {
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { deposit_id: depositId },
+      select: {
+        deposit_id: true,
+        trader_id: true,
+        investment_period_id: true,
+      },
+    });
+
+    if (!deposit?.trader_id || !deposit?.investment_period_id) {
+      return null;
+    }
+
+    const snapshot = await this.prisma.traderPeriodLiveMetrics.findUnique({
+      where: {
+        trader_id_investment_period_id: {
+          trader_id: deposit.trader_id,
+          investment_period_id: deposit.investment_period_id,
+        },
+      },
+    });
+
+    if (!snapshot) {
+      return null;
+    }
+
+    return {
+      deposit_id: deposit.deposit_id,
+      trader_id: snapshot.trader_id,
+      investment_period_id: snapshot.investment_period_id,
+      source_type: snapshot.source_type,
+      profit_percent: String(snapshot.profit_percent),
+      trade_count: snapshot.trade_count,
+      win_rate: String(snapshot.win_rate),
+      captured_at: snapshot.captured_at,
+    };
+  }
 }
