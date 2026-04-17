@@ -43,11 +43,11 @@ enum DepositStatus {
 }
 
 enum InvestmentPeriodStatus {
-  FUNDING
-  TRADING_ACTIVE
-  REPORTING
-  PAYOUT_IN_PROGRESS
-  CLOSED
+  DRAFT
+  ACTIVE
+  LOCKED
+  COMPLETED
+  ARCHIVED
 }
 
 enum ReportStatus {
@@ -72,6 +72,29 @@ enum PayoutDestinationRule {
   ORIGINAL_SENDER
   VERIFIED_ADDRESS
   MANUAL_REVIEW
+}
+
+enum SettlementPreference {
+  WITHDRAW_ALL
+  REINVEST_PRINCIPAL
+  REINVEST_ALL
+}
+
+enum ReferralPayoutPreference {
+  WITHDRAW
+  HOLD
+}
+
+enum ReferralRewardType {
+  FIRST_DEPOSIT
+  PERIOD_PROFIT
+}
+
+enum ReferralRewardStatus {
+  PENDING
+  APPROVED
+  SETTLED
+  CANCELLED
 }
 
 enum NotificationType {
@@ -145,18 +168,28 @@ enum JobType {
 // ==================== MODELS ====================
 
 model User {
-  user_id             String        @id @default(uuid())
-  telegram_id         BigInt        @unique
-  username            String?
-  display_name        String?
-  language            String        @default("en")
-  role                UserRole      @default(USER)
-  status              UserStatus    @default(ACTIVE)
-  legal_ack_version   String?
-  risk_ack_version    String?
-  created_at          DateTime      @default(now())
-  updated_at          DateTime      @updatedAt
-  last_login_at       DateTime?
+  user_id                   String                   @id @default(uuid())
+  telegram_id               BigInt                   @unique
+  referral_code             String                   @unique
+  referred_by_user_id       String?
+  referred_at               DateTime?
+  referral_source           String?
+  referral_payout_preference ReferralPayoutPreference @default(WITHDRAW)
+  held_referral_balance_bsc Decimal                  @default(0)
+  held_referral_balance_ton Decimal                  @default(0)
+  held_cycle_balance_bsc    Decimal                  @default(0)
+  held_cycle_balance_ton    Decimal                  @default(0)
+  payout_threshold_usd      Decimal                  @default(5)
+  username                  String?
+  display_name              String?
+  language                  String                   @default("en")
+  role                      UserRole                 @default(USER)
+  status                    UserStatus               @default(ACTIVE)
+  legal_ack_version         String?
+  risk_ack_version          String?
+  created_at                DateTime                 @default(now())
+  updated_at                DateTime                 @updatedAt
+  last_login_at             DateTime?
 
   wallets             Wallet[]
   deposits            Deposit[]
@@ -164,6 +197,29 @@ model User {
   support_cases       SupportCase[]
   admin_actions       AdminAction[]
   audit_events        AuditEvent[]  @relation("AuditActor")
+  referred_by         User?         @relation("UserReferrals", fields: [referred_by_user_id], references: [user_id], onDelete: SetNull)
+  referrals           User[]        @relation("UserReferrals")
+  earned_referral_rewards ReferralReward[] @relation("ReferralRewardBeneficiary")
+  generated_referral_rewards ReferralReward[] @relation("ReferralRewardSourceUser")
+  pending_referral_attributions PendingReferralAttribution[] @relation("PendingReferralConsumer")
+
+  @@index([referred_by_user_id])
+}
+
+model PendingReferralAttribution {
+  pending_referral_attribution_id String   @id @default(uuid())
+  telegram_id                     BigInt   @unique
+  referral_code                   String
+  source                          String
+  created_at                      DateTime @default(now())
+  expires_at                      DateTime
+  consumed_at                     DateTime?
+  consumed_by_user_id             String?
+
+  consumed_by_user                User?    @relation("PendingReferralConsumer", fields: [consumed_by_user_id], references: [user_id], onDelete: SetNull)
+
+  @@index([expires_at])
+  @@index([consumed_by_user_id])
 }
 
 model Wallet {
@@ -171,9 +227,11 @@ model Wallet {
   user_id                   String
   network                   String
   source_address            String
+  display_address           String?
   payout_address            String?
   source_address_confidence Float?
   payout_address_type       String?
+  wallet_role               String   @default("SOURCE")
   verification_status       String   @default("unverified")
   first_seen_at             DateTime @default(now())
   last_used_at              DateTime?
@@ -194,7 +252,7 @@ model InvestmentPeriod {
   start_date             DateTime
   end_date               DateTime
   lock_date              DateTime?
-  status                 InvestmentPeriodStatus   @default(FUNDING)
+  status                 InvestmentPeriodStatus   @default(DRAFT)
   accepted_networks      String[]
   accepted_assets        String[]
   minimum_amount_rules   Json?
@@ -205,114 +263,179 @@ model InvestmentPeriod {
   updated_at             DateTime                 @updatedAt
 
   deposits               Deposit[]
-  settlement_snapshot    PeriodSettlementSnapshot?
-  payout_registry        PeriodPayoutRegistry?
+  trader_reports         PeriodTraderReport[]
+  payout_registries      PayoutRegistry[]
+  referral_rewards       ReferralReward[]
+}
+
+model Trader {
+  trader_id              String              @id @default(uuid())
+  nickname               String              @unique
+  slug                   String              @unique
+  display_name           String
+  description            String?
+  profile_title          String              @default("semper in motu ai")
+  status                 String              @default("ACTIVE")
+  created_at             DateTime            @default(now())
+  updated_at             DateTime            @updatedAt
+
+  main_addresses         TraderMainAddress[]
+  deposits               Deposit[]
+  period_reports         PeriodTraderReport[]
+  payout_registries      PayoutRegistry[]
+  payout_registry_rows   PayoutRegistryRow[]
+}
+
+model TraderMainAddress {
+  trader_main_address_id String   @id @default(uuid())
+  trader_id              String
+  network                String
+  asset_symbol           String
+  address                String
+  is_active              Boolean  @default(true)
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+
+  trader                 Trader   @relation(fields: [trader_id], references: [trader_id], onDelete: Cascade)
+  deposits               Deposit[]
+
+  @@index([trader_id])
+  @@index([trader_id, network, asset_symbol, is_active])
 }
 
 model Deposit {
-  deposit_id                String        @id @default(uuid())
-  user_id                   String
-  investment_period_id      String
-  network                   String
-  asset_symbol              String
-  deposit_route             String        @unique
-  source_address            String?
-  tx_hash                   String?
-  requested_amount          Decimal?
-  confirmed_amount          Decimal?
-  confirmation_count        Int           @default(0)
-  min_required_confirmations Int          @default(1)
-  status                    DepositStatus  @default(CREATED)
-  status_reason             String?
-  route_expires_at          DateTime?
-  created_at                DateTime       @default(now())
-  detected_at               DateTime?
-  confirmed_at              DateTime?
-  activated_at              DateTime?
-  completed_at              DateTime?
-  cancelled_at              DateTime?
+  deposit_id                   String              @id @default(uuid())
+  user_id                      String
+  investment_period_id         String
+  trader_id                    String?
+  trader_main_address_id       String?
+  network                      String
+  asset_symbol                 String
+  deposit_route                String              @unique
+  source_address               String?
+  source_address_display       String?
+  return_address               String?
+  return_address_display       String?
+  ton_deposit_memo             String?
+  return_memo                  String?
+  settlement_preference        SettlementPreference @default(WITHDRAW_ALL)
+  auto_renew_trader_id_snapshot String?
+  auto_renew_network_snapshot   String?
+  auto_renew_asset_symbol_snapshot String?
+  rolled_over_into_deposit_id   String?
+  rollover_source_deposit_id    String?
+  rollover_attempted_at         DateTime?
+  rollover_block_reason         String?
+  tx_hash                      String?
+  requested_amount             Decimal?
+  confirmed_amount             Decimal?
+  confirmation_count           Int                 @default(0)
+  min_required_confirmations    Int                @default(1)
+  status                       DepositStatus       @default(CREATED)
+  status_reason                String?
+  route_expires_at             DateTime?
+  created_at                   DateTime            @default(now())
+  detected_at                  DateTime?
+  confirmed_at                 DateTime?
+  activated_at                 DateTime?
+  completed_at                 DateTime?
+  cancelled_at                 DateTime?
 
   user                      User            @relation(fields: [user_id], references: [user_id])
   investment_period         InvestmentPeriod @relation(fields: [investment_period_id], references: [investment_period_id])
+  trader                    Trader?          @relation(fields: [trader_id], references: [trader_id])
+  trader_main_address       TraderMainAddress? @relation(fields: [trader_main_address_id], references: [trader_main_address_id])
   report                    ProfitLossReport?
   payouts                   Payout[]
-  payout_registry_items     PeriodPayoutRegistryItem[]
+  payout_registry_rows      PayoutRegistryRow[]
+  referral_rewards          ReferralReward[]
 
   @@index([user_id])
   @@index([investment_period_id])
+  @@index([trader_id])
+  @@index([trader_main_address_id])
   @@index([status])
   @@index([network, status])
   @@index([deposit_route])
   @@index([tx_hash])
 }
 
-model PeriodSettlementSnapshot {
-  settlement_snapshot_id String    @id @default(uuid())
-  investment_period_id    String    @unique
-  ending_balance_usdt     Decimal
-  total_deposits_usdt     Decimal
-  gross_pnl_usdt          Decimal
-  trader_fee_percent      Float     @default(40)
-  trader_fee_usdt         Decimal
-  network_fees_json       Json
-  net_distributable_usdt  Decimal
-  calculated_at           DateTime  @default(now())
-  approved_at             DateTime?
-  approved_by             String?
+model PeriodTraderReport {
+  trader_report_id         String    @id @default(uuid())
+  investment_period_id     String
+  trader_id                String
+  status                   String    @default("DRAFT")
+  ending_balance_usdt      Decimal?
+  trader_fee_percent       Decimal?
+  network_fees_json        Json?
+  generated_by             String?
+  approved_by              String?
+  approved_at              DateTime?
+  published_at             DateTime?
+  created_at               DateTime  @default(now())
+  updated_at               DateTime  @updatedAt
 
-  investment_period       InvestmentPeriod @relation(fields: [investment_period_id], references: [investment_period_id], onDelete: Cascade)
-  payout_registry         PeriodPayoutRegistry?
+  investment_period        InvestmentPeriod @relation(fields: [investment_period_id], references: [investment_period_id], onDelete: Cascade)
+  trader                   Trader           @relation(fields: [trader_id], references: [trader_id], onDelete: Cascade)
+  payout_registry          PayoutRegistry?
 
+  @@unique([investment_period_id, trader_id])
   @@index([investment_period_id])
-  @@index([approved_at])
+  @@index([trader_id])
 }
 
-model PeriodPayoutRegistry {
-  payout_registry_id     String    @id @default(uuid())
-  investment_period_id   String    @unique
-  settlement_snapshot_id String    @unique
-  generated_at           DateTime  @default(now())
-  generated_by           String?
+model PayoutRegistry {
+  payout_registry_id       String             @id @default(uuid())
+  investment_period_id     String
+  trader_report_id         String             @unique
+  trader_id                String
+  generated_by             String?
+  created_at               DateTime           @default(now())
+  updated_at               DateTime           @updatedAt
 
-  investment_period      InvestmentPeriod        @relation(fields: [investment_period_id], references: [investment_period_id], onDelete: Cascade)
-  settlement_snapshot    PeriodSettlementSnapshot @relation(fields: [settlement_snapshot_id], references: [settlement_snapshot_id], onDelete: Cascade)
-  items                  PeriodPayoutRegistryItem[]
+  investment_period        InvestmentPeriod   @relation(fields: [investment_period_id], references: [investment_period_id], onDelete: Cascade)
+  trader_report            PeriodTraderReport @relation(fields: [trader_report_id], references: [trader_report_id], onDelete: Cascade)
+  trader                   Trader             @relation(fields: [trader_id], references: [trader_id], onDelete: Cascade)
+  rows                     PayoutRegistryRow[]
 
   @@index([investment_period_id])
-  @@index([settlement_snapshot_id])
-  @@index([generated_at])
+  @@index([trader_id])
 }
 
-model PeriodPayoutRegistryItem {
-  payout_registry_item_id   String   @id @default(uuid())
-  payout_registry_id        String
-  deposit_id                String
-  network                   String
-  asset_symbol              String
-  source_address            String?
-  deposit_amount_usdt       Decimal
-  share_ratio               Decimal
-  confirmed_amount_usdt     Decimal
-  network_fee_bucket_usdt   Decimal
-  network_fee_allocation_usdt Decimal
-  payout_gross_usdt         Decimal
-  payout_fee_usdt           Decimal
-  payout_net_usdt           Decimal
-  payout_amount_usdt        Decimal
-  status                    PayoutStatus @default(PREPARED)
-  tx_hash                   String?
-  sent_at                   DateTime?
-  completed_at              DateTime?
-  failure_reason            String?
-  created_at                DateTime @default(now())
+model PayoutRegistryRow {
+  payout_registry_row_id   String         @id @default(uuid())
+  payout_registry_id       String
+  investment_period_id     String
+  trader_report_id         String
+  deposit_id               String
+  trader_id                String
+  trader_nickname          String
+  network                  String
+  asset_symbol             String
+  deposit_amount_usdt      Decimal
+  share_ratio              Decimal
+  payout_gross_usdt        Decimal
+  payout_fee_usdt          Decimal
+  payout_net_usdt          Decimal
+  default_payout_address   String?
+  selected_payout_address  String?
+  address_source           String
+  status                   String         @default("PENDING")
+  tx_hash                  String?
+  paid_at                  DateTime?
+  failure_reason           String?
+  notes                    String?
+  created_at               DateTime       @default(now())
+  updated_at               DateTime       @updatedAt
 
-  payout_registry           PeriodPayoutRegistry @relation(fields: [payout_registry_id], references: [payout_registry_id], onDelete: Cascade)
-  deposit                   Deposit              @relation(fields: [deposit_id], references: [deposit_id], onDelete: Cascade)
+  payout_registry          PayoutRegistry @relation(fields: [payout_registry_id], references: [payout_registry_id], onDelete: Cascade)
+  deposit                  Deposit        @relation(fields: [deposit_id], references: [deposit_id], onDelete: Cascade)
+  trader                   Trader         @relation(fields: [trader_id], references: [trader_id], onDelete: Cascade)
 
   @@unique([payout_registry_id, deposit_id])
-  @@index([payout_registry_id])
+  @@index([investment_period_id])
+  @@index([trader_report_id])
   @@index([deposit_id])
-  @@index([network])
   @@index([status])
 }
 
@@ -334,6 +457,37 @@ model ProfitLossReport {
   status               ReportStatus @default(DRAFT)
 
   deposit              Deposit      @relation(fields: [deposit_id], references: [deposit_id])
+  referral_rewards     ReferralReward[]
+}
+
+model ReferralReward {
+  referral_reward_id    String               @id @default(uuid())
+  beneficiary_user_id   String
+  source_user_id        String
+  source_deposit_id     String
+  source_report_id      String?
+  investment_period_id  String
+  referral_level        Int
+  reward_type           ReferralRewardType
+  base_amount           Decimal
+  reward_percent        Decimal
+  reward_amount         Decimal
+  status                ReferralRewardStatus @default(PENDING)
+  created_at            DateTime             @default(now())
+  settled_at            DateTime?
+  metadata_json         Json?
+
+  beneficiary_user      User                 @relation("ReferralRewardBeneficiary", fields: [beneficiary_user_id], references: [user_id], onDelete: Cascade)
+  source_user           User                 @relation("ReferralRewardSourceUser", fields: [source_user_id], references: [user_id], onDelete: Cascade)
+  source_deposit        Deposit              @relation(fields: [source_deposit_id], references: [deposit_id], onDelete: Cascade)
+  source_report         ProfitLossReport?    @relation(fields: [source_report_id], references: [report_id], onDelete: SetNull)
+  investment_period     InvestmentPeriod     @relation(fields: [investment_period_id], references: [investment_period_id], onDelete: Cascade)
+
+  @@unique([beneficiary_user_id, source_deposit_id, reward_type])
+  @@index([source_user_id])
+  @@index([investment_period_id])
+  @@index([status])
+  @@index([reward_type])
 }
 
 model Payout {
@@ -483,3 +637,21 @@ model SystemJob {
   @@index([job_type])
   @@index([queued_at])
 }
+
+
+model TraderPeriodLiveMetrics {
+  trader_period_live_metrics_id String   @id @default(uuid())
+  trader_id                     String
+  investment_period_id          String
+  source_type                   String
+  profit_percent                Decimal  @db.Decimal(10, 4)
+  trade_count                   Int
+  win_rate                      Decimal  @db.Decimal(10, 4)
+  captured_at                   DateTime
+  raw_payload                   Json?
+  created_at                    DateTime @default(now())
+  updated_at                    DateTime @updatedAt
+
+  @@unique([trader_id, investment_period_id])
+}
+
