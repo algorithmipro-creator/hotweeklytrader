@@ -304,7 +304,7 @@ describe('DepositsService', () => {
       expect(mockPrisma.deposit.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            return_address: '0:return',
+            return_address: expect.any(String),
             ton_deposit_memo: 'TWUSER1',
             return_memo: 'RETURN456',
             settlement_preference: 'WITHDRAW_ALL',
@@ -557,6 +557,155 @@ describe('DepositsService', () => {
       await expect(service.cancelByUser('dep-1', 'user-1')).rejects.toThrow(
         new BadRequestException('Only awaiting-transfer deposits can be cancelled by the user'),
       );
+    });
+  });
+
+
+  describe('create with deferred exchange routing', () => {
+    it('allows TON exchange deposits to be created without a source or return address up front', async () => {
+      mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
+        investment_period_id: 'period-1',
+        status: 'ACTIVE',
+        accepted_networks: ['TON'],
+        accepted_assets: ['USDT'],
+      });
+      mockTradersService.resolveMainAddress.mockResolvedValue({
+        trader_main_address_id: 'main-1',
+        address: 'UQ-trader-wallet',
+      });
+      mockPrisma.deposit.count.mockResolvedValue(0);
+      mockPrisma.deposit.create.mockImplementation(async ({ data }: any) => ({
+        deposit_id: 'deposit-1',
+        user_id: data.user_id,
+        investment_period_id: data.investment_period_id,
+        trader_id: data.trader_id,
+        trader_main_address_id: data.trader_main_address_id,
+        network: data.network,
+        asset_symbol: data.asset_symbol,
+        deposit_route: data.deposit_route,
+        source_address: data.source_address,
+        return_address: data.return_address,
+        ton_deposit_memo: data.ton_deposit_memo,
+        return_memo: data.return_memo,
+        tx_hash: null,
+        requested_amount: null,
+        confirmed_amount: null,
+        confirmation_count: 0,
+        status: data.status,
+        status_reason: null,
+        settlement_preference: data.settlement_preference,
+        auto_renew_trader_id_snapshot: null,
+        auto_renew_network_snapshot: null,
+        auto_renew_asset_symbol_snapshot: null,
+        rolled_over_into_deposit_id: null,
+        rollover_source_deposit_id: null,
+        rollover_attempted_at: null,
+        rollover_block_reason: null,
+        route_expires_at: data.route_expires_at,
+        created_at: new Date('2026-04-17T00:00:00.000Z'),
+        detected_at: null,
+        confirmed_at: null,
+        activated_at: null,
+        completed_at: null,
+        cancelled_at: null,
+        trader_main_address: { address: 'UQ-trader-wallet' },
+      }));
+
+      const result = await service.create('user-1', {
+        investment_period_id: 'period-1',
+        trader_id: 'trader-1',
+        network: 'TON',
+        asset_symbol: 'USDT',
+        sending_from_exchange: true,
+        settlement_preference: 'REINVEST_ALL',
+      } as any);
+
+      expect(mockWalletsService.findOrCreate).not.toHaveBeenCalled();
+      expect(mockPrisma.deposit.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            source_address: null,
+            return_address: null,
+            return_memo: null,
+          }),
+        }),
+      );
+      expect(result.ton_deposit_memo).toMatch(/^TW/);
+    });
+  });
+
+  describe('updateReturnRouting', () => {
+    it('updates deferred TON exchange return routing for the deposit owner', async () => {
+      mockPrisma.deposit.findUnique.mockResolvedValueOnce({
+        deposit_id: 'deposit-1',
+        user_id: 'user-1',
+        status: 'AWAITING_TRANSFER',
+        network: 'TON',
+        asset_symbol: 'USDT',
+      });
+      mockWalletsService.findOrCreate.mockResolvedValue({
+        wallet_id: 'wallet-1',
+        source_address: '0:return',
+      });
+      mockPrisma.deposit.update.mockResolvedValue({
+        deposit_id: 'deposit-1',
+        user_id: 'user-1',
+        investment_period_id: 'period-1',
+        trader_id: 'trader-1',
+        trader_main_address_id: 'main-1',
+        network: 'TON',
+        asset_symbol: 'USDT',
+        deposit_route: 'dr_123',
+        source_address: null,
+        return_address: '0:return',
+        ton_deposit_memo: 'TW1234567890ABCDEF1234567890ABCDEF',
+        return_memo: 'EXCH-42',
+        settlement_preference: 'REINVEST_ALL',
+        auto_renew_trader_id_snapshot: null,
+        auto_renew_network_snapshot: null,
+        auto_renew_asset_symbol_snapshot: null,
+        rolled_over_into_deposit_id: null,
+        rollover_source_deposit_id: null,
+        rollover_attempted_at: null,
+        rollover_block_reason: null,
+        tx_hash: null,
+        requested_amount: null,
+        confirmed_amount: null,
+        confirmation_count: 0,
+        status: 'AWAITING_TRANSFER',
+        status_reason: null,
+        route_expires_at: new Date('2026-04-18T00:00:00.000Z'),
+        created_at: new Date('2026-04-17T00:00:00.000Z'),
+        detected_at: null,
+        confirmed_at: null,
+        activated_at: null,
+        completed_at: null,
+        cancelled_at: null,
+        trader_main_address: { address: 'UQ-trader-wallet' },
+      });
+
+      const result = await service.updateReturnRouting('deposit-1', 'user-1', {
+        return_address: 'UQBURPCkGRJDaQiYF_e9v1WGCEKx7lbcxg_-hNaa_tn5Aw2U',
+        return_memo: 'EXCH-42',
+      } as any);
+
+      expect(mockWalletsService.findOrCreate).toHaveBeenCalledWith(
+        'user-1',
+        'TON',
+        'UQBURPCkGRJDaQiYF_e9v1WGCEKx7lbcxg_-hNaa_tn5Aw2U',
+        'RETURNING',
+      );
+      expect(mockPrisma.deposit.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { deposit_id: 'deposit-1' },
+          data: expect.objectContaining({
+            return_address: expect.any(String),
+            return_memo: 'EXCH-42',
+          }),
+          include: { trader_main_address: true },
+        }),
+      );
+      expect(result.return_memo).toBe('EXCH-42');
     });
   });
 

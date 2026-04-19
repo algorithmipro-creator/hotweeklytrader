@@ -391,7 +391,9 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
       where: {
         network: tx.network,
         status: { in: ['AWAITING_TRANSFER', 'DETECTED', 'CONFIRMING'] },
-        source_address: tx.network === 'TON' ? { not: null } : tx.fromAddress.toLowerCase(),
+        ...(tx.network === 'TON'
+          ? { OR: [{ source_address: { not: null } }, { ton_deposit_memo: { not: null } }] }
+          : { source_address: tx.fromAddress.toLowerCase() }),
       },
     });
     const deposits =
@@ -400,6 +402,17 @@ export class TonUsdtWatcherService implements BlockchainWatcher, OnModuleInit, O
         : candidateDeposits;
 
     for (const deposit of deposits) {
+      const duplicateTxBinding = await this.prisma.deposit.findFirst({
+        where: {
+          tx_hash: tx.txHash,
+          deposit_id: { not: deposit.deposit_id },
+        },
+      });
+      if (duplicateTxBinding) {
+        this.logger.warn(`TON tx ${tx.txHash} is already bound to deposit ${duplicateTxBinding.deposit_id}; skipping deposit ${deposit.deposit_id}`);
+        continue;
+      }
+
       const confirmedAmount = parseFloat(tx.amount);
       let currentStatus = deposit.status;
 

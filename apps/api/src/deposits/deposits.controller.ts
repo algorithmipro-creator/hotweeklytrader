@@ -5,7 +5,7 @@ import { Throttle } from '@nestjs/throttler';
 import { DepositsService } from './deposits.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CreateDepositDto, DepositDto } from './dto/deposit.dto';
+import { CreateDepositDto, DepositDto, UpdateDepositReturnRoutingDto } from './dto/deposit.dto';
 
 @Controller('deposits')
 @UseGuards(JwtAuthGuard)
@@ -37,6 +37,16 @@ export class DepositsController {
     @CurrentUser() user: any,
   ): Promise<DepositDto> {
     return this.depositsService.cancelByUser(id, user.user_id);
+  }
+
+
+  @Put(':id/return-routing')
+  async updateReturnRouting(
+    @Param('id') id: string,
+    @Body() dto: UpdateDepositReturnRoutingDto,
+    @CurrentUser() user: any,
+  ): Promise<DepositDto> {
+    return this.depositsService.updateReturnRouting(id, user.user_id, dto);
   }
 
   @Put(':id/settlement-preference')

@@ -1,24 +1,19 @@
-import { resolveCorsOrigin } from './cors.util';
+import { parseCorsOrigins } from './cors.util';
 
-describe('resolveCorsOrigin', () => {
-  it('returns wildcard when env is missing', () => {
-    expect(resolveCorsOrigin(undefined)).toBe('*');
+describe('parseCorsOrigins', () => {
+  it('returns true for wildcard origin', () => {
+    expect(parseCorsOrigins('*')).toBe(true);
   });
 
-  it('returns a single origin string unchanged', () => {
-    expect(resolveCorsOrigin('https://hotweeklytrader.duckdns.org')).toBe(
-      'https://hotweeklytrader.duckdns.org',
-    );
+  it('returns a trimmed array for comma-separated origins', () => {
+    expect(parseCorsOrigins(' https://hotweeklytrader.duckdns.org , https://hotweeklytrader-admin.duckdns.org '))
+      .toEqual([
+        'https://hotweeklytrader.duckdns.org',
+        'https://hotweeklytrader-admin.duckdns.org',
+      ]);
   });
 
-  it('splits comma-separated origins into an array', () => {
-    expect(
-      resolveCorsOrigin(
-        'https://hotweeklytrader.duckdns.org, https://hotweeklytrader-admin.duckdns.org',
-      ),
-    ).toEqual([
-      'https://hotweeklytrader.duckdns.org',
-      'https://hotweeklytrader-admin.duckdns.org',
-    ]);
+  it('falls back to true when the string is empty', () => {
+    expect(parseCorsOrigins('   ')).toBe(true);
   });
 });

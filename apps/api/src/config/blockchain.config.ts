@@ -17,8 +17,11 @@ export default registerAs('blockchain', () => ({
     depositAddress: process.env.BLOCKCHAIN_TRON_DEPOSIT_ADDRESS || '',
   },
   ton: {
-    rpcUrl: process.env.BLOCKCHAIN_TON_RPC_URL || 'https://toncenter.com/api/v2',
-    confirmationsRequired: parseInt(process.env.BLOCKCHAIN_TON_CONFIRMATIONS || '20', 10),
+    rpcUrl: process.env.BLOCKCHAIN_TON_RPC_URL || 'https://toncenter.com',
+    confirmationsRequired: parseInt(process.env.BLOCKCHAIN_TON_CONFIRMATIONS || '6', 10),
     depositAddress: process.env.BLOCKCHAIN_TON_DEPOSIT_ADDRESS || '',
+    usdtMasterAddress:
+      process.env.BLOCKCHAIN_TON_USDT_MASTER_ADDRESS || 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+    apiKey: process.env.BLOCKCHAIN_TON_API_KEY || '',
   },
 }));

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>deplexapp Home Preview Variant B</title>
+    <style>
+      :root {
+        --bg: #040b10;
+        --bg-soft: #09161d;
+        --panel: rgba(8, 20, 26, 0.88);
+        --panel-2: rgba(10, 27, 35, 0.96);
+        --line: rgba(76, 229, 220, 0.18);
+        --accent: #19d3d3;
+        --accent-soft: #75f3dd;
+        --accent-dim: rgba(25, 211, 211, 0.18);
+        --violet: #9987ff;
+        --text: #ebffff;
+        --muted: #8fb2b8;
+        --shadow: 0 26px 70px rgba(0, 0, 0, 0.48);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 50% 10%, rgba(24, 185, 191, 0.2), transparent 26%),
+          radial-gradient(circle at 80% 0%, rgba(153, 135, 255, 0.12), transparent 18%),
+          linear-gradient(180deg, #03090d 0%, #061118 46%, #03090d 100%);
+      }
+
+      .phone {
+        width: min(420px, calc(100vw - 28px));
+        min-height: 860px;
+        padding: 16px;
+        border-radius: 40px;
+        background:
+          linear-gradient(180deg, rgba(117, 243, 221, 0.08), rgba(255, 255, 255, 0.02)),
+          rgba(3, 9, 13, 0.82);
+        box-shadow:
+          inset 0 0 0 1px rgba(117, 243, 221, 0.16),
+          0 30px 80px rgba(0, 0, 0, 0.52);
+      }
+
+      .screen {
+        min-height: 828px;
+        position: relative;
+        overflow: hidden;
+        border-radius: 30px;
+        padding: 18px 18px 108px;
+        background:
+          linear-gradient(rgba(98, 212, 217, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(98, 212, 217, 0.04) 1px, transparent 1px),
+          linear-gradient(180deg, #08141b 0%, #081219 100%);
+        background-size: 22px 22px, 22px 22px, auto;
+        box-shadow:
+          inset 0 0 0 1px rgba(117, 243, 221, 0.12),
+          inset 0 0 36px rgba(25, 211, 211, 0.06);
+      }
+
+      .screen::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 50% -10%, rgba(25, 211, 211, 0.2), transparent 30%),
+          radial-gradient(circle at 50% 115%, rgba(117, 243, 221, 0.14), transparent 26%);
+        pointer-events: none;
+      }
+
+      .topbar,
+      .hero,
+      .actions,
+      .status-card,
+      .dock {
+        position: relative;
+        z-index: 1;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(8, 20, 26, 0.72);
+        color: var(--muted);
+        backdrop-filter: blur(10px);
+      }
+
+      .brand-mark {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent-soft), var(--accent));
+        box-shadow: 0 0 18px rgba(117, 243, 221, 0.6);
+      }
+
+      .top-actions {
+        display: flex;
+        gap: 10px;
+      }
+
+      .icon-chip {
+        width: 40px;
+        min-height: 40px;
+        padding: 0;
+        color: var(--text);
+      }
+
+      .hero {
+        margin-top: 16px;
+        padding: 18px;
+        border-radius: 28px;
+        background:
+          linear-gradient(135deg, rgba(14, 29, 36, 0.96), rgba(8, 18, 24, 0.92)),
+          var(--panel);
+        border: 1px solid rgba(117, 243, 221, 0.14);
+        box-shadow: var(--shadow);
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 14px;
+        align-items: center;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--accent-soft);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.22em;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 29px;
+        line-height: 1.04;
+        letter-spacing: -0.045em;
+      }
+
+      .hero-copy p {
+        margin: 12px 0 0;
+        max-width: 180px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .robot-panel {
+        aspect-ratio: 1 / 1;
+        border-radius: 24px;
+        position: relative;
+        background:
+          radial-gradient(circle at 50% 40%, rgba(25, 211, 211, 0.22), transparent 34%),
+          linear-gradient(180deg, rgba(18, 37, 47, 0.96), rgba(8, 17, 23, 0.98));
+        border: 1px solid rgba(117, 243, 221, 0.14);
+        display: grid;
+        place-items: center;
+      }
+
+      .robot-panel::before {
+        content: "";
+        position: absolute;
+        inset: 14px;
+        border-radius: 18px;
+        border: 1px solid rgba(117, 243, 221, 0.08);
+      }
+
+      .robot-head {
+        width: 126px;
+        position: relative;
+      }
+
+      .antennas {
+        display: flex;
+        justify-content: center;
+        gap: 34px;
+        margin-bottom: -6px;
+      }
+
+      .antennas span {
+        width: 10px;
+        height: 32px;
+        border-radius: 10px 10px 3px 3px;
+        background: linear-gradient(180deg, #8b9ca3, #263038);
+      }
+
+      .head-shell {
+        padding: 8px;
+        border-radius: 20px;
+        background: linear-gradient(180deg, #435057, #0f181f 42%, #0a1117);
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 0 24px rgba(25, 211, 211, 0.16);
+      }
+
+      .head-screen {
+        height: 96px;
+        position: relative;
+        overflow: hidden;
+        border-radius: 12px;
+        background:
+          linear-gradient(rgba(106, 203, 206, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(106, 203, 206, 0.08) 1px, transparent 1px),
+          linear-gradient(180deg, rgba(17, 39, 46, 0.96), rgba(8, 17, 23, 1));
+        background-size: 16px 16px, 16px 16px, auto;
+      }
+
+      .head-screen::before,
+      .head-screen::after {
+        content: "";
+        position: absolute;
+        top: 22px;
+        width: 12px;
+        height: 28px;
+        border-radius: 999px;
+      }
+
+      .head-screen::before {
+        left: 28px;
+        background: linear-gradient(180deg, #79f6ee, #1ad7d9);
+        box-shadow: 0 0 16px rgba(26, 215, 217, 0.7);
+      }
+
+      .head-screen::after {
+        right: 28px;
+        background: linear-gradient(180deg, #ffabc4, #ff79aa);
+        box-shadow: 0 0 16px rgba(255, 121, 170, 0.7);
+      }
+
+      .smile {
+        position: absolute;
+        left: 50%;
+        bottom: 18px;
+        width: 58px;
+        height: 26px;
+        transform: translateX(-50%);
+        border-bottom: 6px solid var(--accent);
+        border-radius: 0 0 50px 50px;
+      }
+
+      .actions {
+        display: grid;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .action {
+        border: 0;
+        width: 100%;
+        padding: 16px 16px 14px;
+        border-radius: 24px;
+        text-align: left;
+        color: var(--text);
+        cursor: pointer;
+        background: var(--panel);
+        border: 1px solid rgba(117, 243, 221, 0.12);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
+      }
+
+      .action.featured {
+        background:
+          linear-gradient(135deg, rgba(25, 211, 211, 0.16), rgba(117, 243, 221, 0.08)),
+          rgba(10, 24, 30, 0.98);
+      }
+
+      .action.primary {
+        background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+        color: #07272d;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.38),
+          0 18px 34px rgba(10, 199, 204, 0.24);
+      }
+
+      .action-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .action-row .icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .action.primary .icon {
+        background: rgba(1, 42, 44, 0.14);
+      }
+
+      .action small {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 11px;
+      }
+
+      .action.primary small {
+        color: rgba(2, 42, 44, 0.7);
+      }
+
+      .status-card {
+        margin-top: 18px;
+        padding: 16px;
+        border-radius: 26px;
+        background: var(--panel-2);
+        border: 1px solid rgba(117, 243, 221, 0.12);
+        box-shadow: var(--shadow);
+      }
+
+      .status-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .status-head h2 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .status-badge {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(25, 211, 211, 0.1);
+        color: var(--accent-soft);
+        border: 1px solid rgba(117, 243, 221, 0.14);
+        font-size: 11px;
+      }
+
+      .status-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .status-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: rgba(7, 16, 21, 0.88);
+        border: 1px solid rgba(117, 243, 221, 0.08);
+      }
+
+      .status-item span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .status-item strong {
+        font-size: 15px;
+      }
+
+      .dock {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        bottom: 18px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        padding: 10px;
+        border-radius: 24px;
+        background: rgba(8, 20, 26, 0.94);
+        border: 1px solid rgba(117, 243, 221, 0.14);
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+      }
+
+      .dock button {
+        border: 0;
+        border-radius: 16px;
+        background: transparent;
+        color: var(--muted);
+        display: grid;
+        justify-items: center;
+        gap: 6px;
+        padding: 10px 0;
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+
+      .dock button span {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.04);
+        font-size: 16px;
+      }
+
+      .dock button.active {
+        color: var(--text);
+        background: rgba(25, 211, 211, 0.1);
+      }
+
+      .dock button.active span {
+        background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+        color: #05272d;
+      }
+
+      @media (max-width: 480px) {
+        .phone {
+          width: 100vw;
+          min-height: 100vh;
+          border-radius: 0;
+          padding: 0;
+        }
+
+        .screen {
+          min-height: 100vh;
+          border-radius: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="phone">
+      <section class="screen">
+        <div class="topbar">
+          <div class="chip">
+            <span class="brand-mark"></span>
+            deplexapp
+          </div>
+          <div class="top-actions">
+            <button class="chip icon-chip" aria-label="Language">EN</button>
+            <button class="chip icon-chip" aria-label="User">◌</button>
+          </div>
+        </div>
+
+        <section class="hero">
+          <div class="hero-grid">
+            <div class="hero-copy">
+              <p class="eyebrow">AI Trade Sprint</p>
+              <h1>Choose an AI trader and start sprint</h1>
+              <p>Weekly logic. Clear routing. One clean path into your next deposit.</p>
+            </div>
+
+            <div class="robot-panel" aria-hidden="true">
+              <div class="robot-head">
+                <div class="antennas">
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="head-shell">
+                  <div class="head-screen">
+                    <div class="smile"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="actions">
+          <button class="action featured">
+            <span class="action-row">
+              Traders
+              <span class="icon">◈</span>
+            </span>
+            <small>choose your lexer</small>
+          </button>
+
+          <button class="action primary">
+            <span class="action-row">
+              New dep
+              <span class="icon">+</span>
+            </span>
+            <small>Create a new sprint</small>
+          </button>
+
+          <button class="action">
+            <span class="action-row">
+              My dep
+              <span class="icon">›</span>
+            </span>
+            <small>Track your active deposits</small>
+          </button>
+        </section>
+
+        <section class="status-card">
+          <div class="status-head">
+            <h2>Sprint Status</h2>
+            <span class="status-badge">Live</span>
+          </div>
+
+          <div class="status-list">
+            <div class="status-item">
+              <span>Current Period</span>
+              <strong>Weekly Sprint</strong>
+            </div>
+            <div class="status-item">
+              <span>Trader Access</span>
+              <strong>Open</strong>
+            </div>
+            <div class="status-item">
+              <span>Networks</span>
+              <strong>TON / TRON / BSC</strong>
+            </div>
+          </div>
+        </section>
+
+        <nav class="dock" aria-label="Bottom navigation">
+          <button><span>?</span>FAQ</button>
+          <button class="active"><span>⌂</span>Home</button>
+          <button><span>◈</span>Trade</button>
+          <button><span>⌕</span>Help</button>
+          <button><span>◔</span>Bell</button>
+        </nav>
+      </section>
+    </main>
+  </body>
+</html>

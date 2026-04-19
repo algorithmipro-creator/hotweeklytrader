@@ -2,6 +2,8 @@ import { Test } from '@nestjs/testing';
 import { EvmWatcherService } from './evm-watcher.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { DepositsService } from '../../deposits/deposits.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 describe('EvmWatcherService', () => {
   let service: EvmWatcherService;
@@ -25,12 +27,23 @@ describe('EvmWatcherService', () => {
     },
   };
 
+  const mockDepositsService = {
+    markDetected: jest.fn(),
+    confirmDeposit: jest.fn(),
+  };
+
+  const mockNotificationsService = {
+    createForUser: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
         EvmWatcherService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: DepositsService, useValue: mockDepositsService },
+        { provide: NotificationsService, useValue: mockNotificationsService },
       ],
     }).compile();
 

@@ -1,9 +1,10 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { adminLogin, clearAdminSession, getProfile, isAdminRole } from '../lib/api';
+import { adminLogin, getProfile } from '../lib/api';
 import { useRouter, usePathname } from 'next/navigation';
 import { waitForTelegramInitData } from '../lib/telegram';
+import { clearAdminToken, ensureAdminTokenCookie, getAdminToken } from '../lib/admin-session.js';
 
 interface User {
   user_id: string;
@@ -25,9 +26,15 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   logout: () => {},
 });
-
 const ADMIN_HOME_PATH = '/';
 const ADMIN_LOGIN_PATH = '/login';
+const ADMIN_ALLOWED_ROLES = new Set(['ADMIN', 'SUPER_ADMIN']);
+
+function redirectTo(path: string) {
+  if (typeof window !== 'undefined') {
+    window.location.replace(path);
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -36,52 +43,87 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const bootstrapAuth = async () => {
-      const initData = !localStorage.getItem('admin_token')
-        ? await waitForTelegramInitData()
-        : '';
+    let cancelled = false;
 
-      if (!localStorage.getItem('admin_token') && initData) {
-        await adminLogin(initData);
+    const resolveProtectedRoute = async () => {
+      const token = ensureAdminTokenCookie(localStorage) ?? getAdminToken(localStorage);
+
+      if (!token) {
+        setUser(null);
+        setLoading(false);
+        if (pathname !== ADMIN_LOGIN_PATH) {
+          redirectTo(ADMIN_LOGIN_PATH);
+        }
+        return;
+      }
+
+      try {
+        const profile = await getProfile();
+        if (cancelled) return;
+
+        if (!ADMIN_ALLOWED_ROLES.has(profile.role)) {
+          clearAdminToken(localStorage);
+          setUser(null);
+          setLoading(false);
+          redirectTo(ADMIN_LOGIN_PATH);
+          return;
+        }
+
+        setUser(profile);
+        setLoading(false);
+        if (pathname === ADMIN_LOGIN_PATH) {
+          redirectTo(ADMIN_HOME_PATH);
+        }
+      } catch {
+        clearAdminToken(localStorage);
+        if (cancelled) return;
+        setUser(null);
+        setLoading(false);
+        if (pathname !== ADMIN_LOGIN_PATH) {
+          redirectTo(ADMIN_LOGIN_PATH);
+        }
       }
     };
 
-    bootstrapAuth()
-      .catch(() => {
-        clearAdminSession();
-      })
-      .finally(() => {
-        const token = localStorage.getItem('admin_token');
-        if (!token) {
-          if (pathname !== ADMIN_LOGIN_PATH) {
-            router.push(ADMIN_LOGIN_PATH);
-          }
+    const resolveLoginRoute = async () => {
+      const token = ensureAdminTokenCookie(localStorage) ?? getAdminToken(localStorage);
+      if (token) {
+        await resolveProtectedRoute();
+        return;
+      }
+
+      try {
+        const initData = await waitForTelegramInitData();
+        if (!initData || cancelled) {
           setLoading(false);
           return;
         }
 
-        getProfile()
-          .then((profile) => {
-            if (!isAdminRole(profile.role)) {
-              throw new Error('Admin access denied');
-            }
-            setUser(profile);
-            if (pathname === ADMIN_LOGIN_PATH) {
-              router.push(ADMIN_HOME_PATH);
-            }
-          })
-          .catch(() => {
-            clearAdminSession();
-            if (pathname !== ADMIN_LOGIN_PATH) {
-              router.push(ADMIN_LOGIN_PATH);
-            }
-          })
-          .finally(() => setLoading(false));
-      });
+        await adminLogin(initData);
+        if (cancelled) return;
+        await resolveProtectedRoute();
+      } catch {
+        clearAdminToken(localStorage);
+        if (cancelled) return;
+        setUser(null);
+        setLoading(false);
+      }
+    };
+
+    setLoading(true);
+    if (pathname === ADMIN_LOGIN_PATH) {
+      resolveLoginRoute();
+    } else {
+      resolveProtectedRoute();
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [pathname, router]);
 
   const logout = () => {
-    clearAdminSession();
+    clearAdminToken(localStorage);
     setUser(null);
     router.push(ADMIN_LOGIN_PATH);
   };

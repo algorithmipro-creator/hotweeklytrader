@@ -4,8 +4,14 @@ import {
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../auth/guards/roles.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AdminReassignReferrerDto } from './dto/admin-reassign-referrer.dto';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 class AdminUpdateUserDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
   status?: string;
 }
 
@@ -48,7 +54,12 @@ export class AdminUsersController {
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+    return this.usersService.getAdminUserById(id);
+  }
+
+  @Get(':id/referral-tree')
+  async getReferralTree(@Param('id') id: string) {
+    return this.usersService.getReferralTree(id);
   }
 
   @Patch(':id/status')
@@ -59,6 +70,18 @@ export class AdminUsersController {
     return (this.usersService as any).prisma.user.update({
       where: { user_id: id },
       data: { status: dto.status },
+    });
+  }
+
+  @Patch(':id/referrer')
+  async updateReferrer(
+    @Param('id') id: string,
+    @Body() dto: AdminReassignReferrerDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.usersService.reassignReferrer(id, dto.referrer_user_id, {
+      actorUserId: user.user_id,
+      reason: dto.reason ?? null,
     });
   }
 }

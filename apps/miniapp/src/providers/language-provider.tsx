@@ -73,6 +73,8 @@ const messages: Record<Language, Messages> = {
     'home.newDepSub': 'Start a new cycle',
     'home.myDep': 'My cycles',
     'home.myDepSub': 'View and track your cycles',
+    'home.myProfile': 'My Profile',
+    'home.myProfileSub': 'Manage your wallet addresses, team, and referral balances',
     'home.latestDepositStatus': 'Latest cycle status',
     'home.depositNotCreated': 'Not created',
     'home.sprintStatus': 'Trading Period Status',
@@ -195,6 +197,17 @@ const messages: Record<Language, Messages> = {
     'profile.referralPayoutPreference': 'Referral payout preference',
     'profile.payoutThreshold': 'Payout threshold',
     'profile.heldBalanceNote': 'Balances below {amount} stay held until they reach the payout threshold.',
+    'profile.title': 'My Profile',
+    'profile.subtitle': 'Keep your addresses, referral workspace, and held balances in one place.',
+    'profile.addressesTitle': 'My Addresses',
+    'profile.addressesSub': 'Manage wallet routing used for cycles and payouts.',
+    'profile.teamTitle': 'My Team',
+    'profile.teamSub': 'Open your referral team workspace and link sharing tools.',
+    'profile.referralsTitle': 'Referral Balances',
+    'profile.referralsSub': 'Review held balances and exact reward history by deposit.',
+    'profile.referralHistoryCount': 'Referral reward rows',
+    'profile.backHome': 'Back to Home',
+    'profile.backToProfile': 'Back to Profile',
     'depositDetail.startDate': 'Start Date',
     'depositDetail.txHash': 'TX Hash',
     'depositDetail.timeline': 'Status Timeline',
@@ -203,10 +216,15 @@ const messages: Record<Language, Messages> = {
     'depositDetail.cancelConfirm': 'Cancel this cycle before transfer?',
     'depositDetail.cancelFailed': 'Failed to cancel cycle',
     'depositDetail.viewReport': 'View Report',
+    'depositDetail.viewReferralBalances': 'Referral Balances',
     'depositDetail.viewPayouts': 'View Payouts',
     'depositDetail.showAddress': 'Show',
     'depositDetail.hideAddress': 'Hide',
     'depositDetail.returnAddressForAsset': 'Your address for returning {asset}',
+    'depositDetail.returnAddressHelp': 'This is the address where settlement and payout for this cycle will be sent.',
+    'depositDetail.returnAddressEmpty': 'Add the address where you want to receive {asset} for this cycle.',
+    'depositDetail.returnAddressEditHelp':
+      'Address where you want to receive {asset} for this cycle. If this address was created on an exchange and requires a memo for crediting, enter it in the memo field.',
     'depositDetail.changeAddress': 'Change address',
     'depositDetail.saveAddress': 'Save address',
     'depositDetail.savingAddress': 'Saving...',
@@ -278,6 +296,13 @@ const messages: Record<Language, Messages> = {
     'reports.fees': 'Fees',
     'reports.netResult': 'Net Result',
     'reports.payoutAmount': 'Payout Amount',
+    'reports.referralNote': 'This report shows the trading result for this cycle. Referral rewards are shown separately in your profile.',
+    'reports.openReferralBalances': 'Open Referral Balances',
+    'referrals.title': 'Referral Balances',
+    'referrals.subtitle': 'These rewards are tracked separately from your cycle report and stay backend-derived.',
+    'referrals.historyTitle': 'Reward History',
+    'referrals.historySub': 'Every row is tied to an exact deposit or cycle source.',
+    'referrals.rowMeta': 'Level {level} · {type}',
 
     'support.kicker': 'Support Desk',
     'support.title': 'Support',
@@ -380,6 +405,8 @@ const messages: Record<Language, Messages> = {
     'home.weeklySprint': 'Недельный спринт',
     'home.myAddresses': 'Мои адреса',
     'home.myAddressesSub': 'Управление адресами кошельков',
+    'home.myProfile': 'Мой профиль',
+    'home.myProfileSub': 'Адреса, команда и реферальные балансы в одном месте',
 
     'traders.kicker': 'Каталог трейдеров',
     'traders.title': 'Выберите AI трейдера',
@@ -477,14 +504,28 @@ const messages: Record<Language, Messages> = {
     'profile.referralPayoutPreference': 'Режим выплаты рефералов',
     'profile.payoutThreshold': 'Порог выплаты',
     'profile.heldBalanceNote': 'Балансы ниже {amount} остаются в ожидании, пока не достигнут порога выплаты.',
+    'profile.title': 'Мой профиль',
+    'profile.subtitle': 'Держите адреса, пространство команды и ожидающие реферальные балансы в одном месте.',
+    'profile.addressesTitle': 'Мои адреса',
+    'profile.addressesSub': 'Управление маршрутами кошельков для циклов и выплат.',
+    'profile.teamTitle': 'Моя команда',
+    'profile.teamSub': 'Откройте пространство команды и инструменты для вашей реферальной ссылки.',
+    'profile.referralsTitle': 'Реферальные балансы',
+    'profile.referralsSub': 'Проверяйте ожидающие балансы и точную историю начислений по депозитам.',
+    'profile.referralHistoryCount': 'Строки реферальных начислений',
+    'profile.backHome': 'Назад домой',
+    'profile.backToProfile': 'Назад в профиль',
     'depositDetail.startDate': 'Дата старта',
     'depositDetail.txHash': 'TX Hash',
     'depositDetail.timeline': 'Таймлайн статусов',
     'depositDetail.viewReport': 'Открыть отчет',
+    'depositDetail.viewReferralBalances': 'Реферальные балансы',
     'depositDetail.viewPayouts': 'Открыть выплаты',
     'depositDetail.showAddress': 'Показать',
     'depositDetail.hideAddress': 'Скрыть',
     'depositDetail.returnAddressForAsset': 'Ваш адрес для возврата {asset}',
+    'depositDetail.returnAddressHelp': 'На этот адрес будут отправлены расчет и выплата по текущему циклу.',
+    'depositDetail.returnAddressEmpty': 'Добавьте адрес, на который хотите получить {asset} по этому циклу.',
     'depositDetail.changeAddress': 'Изменить адрес',
     'depositDetail.saveAddress': 'Сохранить адрес',
     'depositDetail.savingAddress': 'Сохраняем...',
@@ -554,6 +595,13 @@ const messages: Record<Language, Messages> = {
     'reports.fees': 'Комиссии',
     'reports.netResult': 'Чистый результат',
     'reports.payoutAmount': 'Сумма выплаты',
+    'reports.referralNote': 'Этот отчет показывает результат торговли по текущему циклу. Реферальные начисления отображаются отдельно в вашем профиле.',
+    'reports.openReferralBalances': 'Открыть реферальные балансы',
+    'referrals.title': 'Реферальные балансы',
+    'referrals.subtitle': 'Эти начисления показываются отдельно от отчета по циклу и всегда считаются из backend ledger.',
+    'referrals.historyTitle': 'История начислений',
+    'referrals.historySub': 'Каждая строка привязана к конкретному депозиту или источнику цикла.',
+    'referrals.rowMeta': 'Уровень {level} · {type}',
 
     'support.kicker': 'Центр поддержки',
     'support.title': 'Поддержка',
@@ -672,6 +720,8 @@ messageOverrides.ru['depositCreate.sendingFromExchange'] =
   '\u041e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u044e \u0441 \u0431\u0438\u0440\u0436\u0438';
 messageOverrides.ru['depositCreate.exchangeSourceWalletHint'] =
   '\u041f\u0440\u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0435 \u0441 \u0431\u0438\u0440\u0436\u0438 \u0443\u043a\u0430\u0436\u0438\u0442\u0435 \u0430\u0434\u0440\u0435\u0441 \u0434\u043b\u044f \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044f \u0441\u0440\u0435\u0434\u0441\u0442\u0432 \u043d\u0430 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0435\u043c \u0448\u0430\u0433\u0435 \u043f\u043e\u0441\u043b\u0435 \u0441\u043e\u0437\u0434\u0430\u043d\u0438\u044f \u0446\u0438\u043a\u043b\u0430.';
+messageOverrides.ru['depositCreate.exchangeRoutingDeferred'] =
+  '\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0441\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u0446\u0438\u043a\u043b, \u0430 \u0437\u0430\u0442\u0435\u043c \u0434\u043e\u0431\u0430\u0432\u044c\u0442\u0435 \u0430\u0434\u0440\u0435\u0441 \u0431\u0438\u0440\u0436\u0435\u0432\u043e\u0433\u043e \u043a\u043e\u0448\u0435\u043b\u044c\u043a\u0430 \u0438 TON memo \u043d\u0430 \u0432\u0442\u043e\u0440\u043e\u043c \u044d\u043a\u0440\u0430\u043d\u0435 \u0446\u0438\u043a\u043b\u0430.';
 messageOverrides.ru['depositCreate.period'] =
   '\u041f\u0435\u0440\u0438\u043e\u0434 \u0446\u0438\u043a\u043b\u0430';
 messageOverrides.ru['depositCreate.trader'] =
@@ -688,6 +738,18 @@ messageOverrides.ru['depositCreate.tonReturnMemo'] =
   'TON memo';
 messageOverrides.ru['depositCreate.tonReturnMemoHint'] =
   'Memo \u0434\u043b\u044f \u0437\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u044f \u043e\u0431\u0440\u0430\u0442\u043d\u043e \u043d\u0430 \u0432\u0430\u0448 \u0431\u0438\u0440\u0436\u0435\u0432\u043e\u0439 \u0430\u0434\u0440\u0435\u0441, \u0435\u0441\u043b\u0438 \u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044f \u043d\u0430 \u0431\u0438\u0440\u0436\u0435, \u043e\u0442\u043a\u0443\u0434\u0430 \u0432\u044b \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u043b\u0438 \u0441\u0440\u0435\u0434\u0441\u0442\u0432\u0430.';
+messageOverrides.ru['home.myProfile'] = '\u041c\u043e\u0439 \u043f\u0440\u043e\u0444\u0438\u043b\u044c';
+messageOverrides.ru['home.myProfileSub'] =
+  '\u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0439\u0442\u0435 \u0430\u0434\u0440\u0435\u0441\u0430\u043c\u0438 \u043a\u043e\u0448\u0435\u043b\u044c\u043a\u043e\u0432, \u043a\u043e\u043c\u0430\u043d\u0434\u043e\u0439 \u0438 \u0440\u0435\u0444\u0435\u0440\u0430\u043b\u044c\u043d\u044b\u043c\u0438 \u0431\u0430\u043b\u0430\u043d\u0441\u0430\u043c\u0438';
+messageOverrides.ru['profile.title'] = '\u041c\u043e\u0439 \u043f\u0440\u043e\u0444\u0438\u043b\u044c';
+messageOverrides.ru['profile.subtitle'] =
+  '\u0425\u0440\u0430\u043d\u0438\u0442\u0435 \u0430\u0434\u0440\u0435\u0441\u0430, \u0440\u0435\u0444\u0435\u0440\u0430\u043b\u044c\u043d\u044b\u0435 \u0431\u0430\u043b\u0430\u043d\u0441\u044b \u0438 \u0440\u0430\u0431\u043e\u0447\u0435\u0435 \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e \u043a\u043e\u043c\u0430\u043d\u0434\u044b \u0432 \u043e\u0434\u043d\u043e\u043c \u043c\u0435\u0441\u0442\u0435.';
+messageOverrides.ru['profile.referralCode'] = '\u0420\u0435\u0444\u0435\u0440\u0430\u043b\u044c\u043d\u044b\u0439 \u043a\u043e\u0434';
+messageOverrides.ru['profile.rewardHistory'] = '\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u0440\u0435\u0444\u0435\u0440\u0430\u043b\u044c\u043d\u044b\u0445 \u043d\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u0439';
+messageOverrides.ru['profile.noReferralRewards'] = '\u0420\u0435\u0444\u0435\u0440\u0430\u043b\u044c\u043d\u044b\u0445 \u043d\u0430\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442';
+messageOverrides.ru['profile.loadingReferral'] = '\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043c \u0440\u0435\u0444\u0435\u0440\u0430\u043b\u044c\u043d\u044b\u0439 \u043f\u0440\u043e\u0444\u0438\u043b\u044c...';
+messageOverrides.ru['profile.failedLoadReferral'] =
+  '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0440\u0435\u0444\u0435\u0440\u0430\u043b\u044c\u043d\u044b\u0439 \u043f\u0440\u043e\u0444\u0438\u043b\u044c';
 
 type LanguageContextValue = {
   language: Language;

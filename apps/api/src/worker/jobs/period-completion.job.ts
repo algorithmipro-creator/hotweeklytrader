@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PeriodTransitionGuard } from '../../periods/period-transition.guard';
 
 @Injectable()
 export class PeriodCompletionJob {
@@ -23,18 +22,11 @@ export class PeriodCompletionJob {
       return;
     }
 
-    if (period.status !== 'TRADING_ACTIVE') {
-      this.logger.debug(`Period ${periodId} is not in TRADING_ACTIVE state`);
-      return;
-    }
-
-    PeriodTransitionGuard.assertCanTransition(period.status, 'REPORTING');
-
     await this.prisma.investmentPeriod.update({
       where: { investment_period_id: periodId },
-      data: { status: 'REPORTING' },
+      data: { status: 'COMPLETED' },
     });
 
-    this.logger.log(`Period ${periodId} marked as reporting`);
+    this.logger.log(`Period ${periodId} marked as completed`);
   }
 }

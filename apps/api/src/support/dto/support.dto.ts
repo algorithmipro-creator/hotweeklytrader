@@ -52,9 +52,9 @@ export class UpdateSupportCaseDto {
 export class SupportCaseDto {
   case_id: string;
   user_id: string;
-  user_display_name?: string | null;
-  user_username?: string | null;
   user_telegram_id?: string | null;
+  user_username?: string | null;
+  user_display_name?: string | null;
   related_deposit_id: string | null;
   category: string;
   priority: string;

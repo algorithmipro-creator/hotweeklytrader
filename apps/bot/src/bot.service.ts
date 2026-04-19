@@ -1,9 +1,11 @@
+import axios from 'axios';
 import { Bot, Context, session, SessionFlavor, InlineKeyboard } from 'grammy';
 
 interface SessionData {
   userId?: string;
   telegramId: number;
   username?: string;
+  referralCode?: string;
 }
 
 type MyContext = Context & SessionFlavor<SessionData>;
@@ -16,6 +18,8 @@ export class BotService {
   constructor(
     private token: string,
     private miniAppUrl: string,
+    private apiBaseUrl: string,
+    private referralCaptureSecret?: string,
     adminAppUrl?: string,
     adminTelegramIds: number[] = [],
   ) {
@@ -41,29 +45,39 @@ export class BotService {
       const telegramId = ctx.from?.id || 0;
       ctx.session.telegramId = telegramId;
       ctx.session.username = ctx.from?.username;
+      const referralCode = this.extractReferralCodeFromStartPayload(ctx.match);
+      ctx.session.referralCode = referralCode ?? undefined;
+
+      if (referralCode && telegramId) {
+        await this.capturePendingReferral({
+          telegramId,
+          referralCode,
+          source: 'telegram_menu_button',
+        });
+      }
 
       const keyboard = new InlineKeyboard()
-        .webApp('📊 Open Mini App', this.miniAppUrl)
+        .webApp('\uD83D\uDCCA Open Mini App', this.buildMiniAppUrl(referralCode))
         .row()
-        .text('❓ FAQ', 'faq')
-        .text('🆘 Support', 'support');
+        .text('\u2753 FAQ', 'faq')
+        .text('\uD83C\uDD98 Support', 'support');
 
       await ctx.reply(
-        `Welcome to the Investment Service!\n\n` +
-        `• Create deposits and track their status\n` +
-        `• View reports and payout history\n` +
-        `• Get notifications for important events\n\n` +
-        `Tap the button below to get started:`,
+        `Доступ открыт!\n\n` +
+        `Перед вами система алгоритмов, которая работает с движением рынка и потоками данных.\n\n` +
+        `\u2022 Вы выбираете алгоритм — запускается процесс работы.\n\n` +
+        `\u2022 Всё остальное происходит в рамках системы.\n\n` +
+        `Нажмите кнопку ниже, чтобы начать.`,
         { reply_markup: keyboard },
       );
     });
 
     this.bot.command('menu', async (ctx) => {
       const keyboard = new InlineKeyboard()
-        .webApp('📊 Open Mini App', this.miniAppUrl)
+        .webApp('\uD83D\uDCCA Open Mini App', this.buildMiniAppUrl(ctx.session.referralCode))
         .row()
-        .text('❓ FAQ', 'faq')
-        .text('🆘 Support', 'support');
+        .text('\u2753 FAQ', 'faq')
+        .text('\uD83C\uDD98 Support', 'support');
 
       await ctx.reply('Main menu:', { reply_markup: keyboard });
     });
@@ -72,10 +86,10 @@ export class BotService {
       const isAdmin = this.isAdmin(ctx.from?.id || 0);
       await ctx.reply(
         `Available commands:\n` +
-        `/start — Start the bot\n` +
-        `/menu — Show main menu\n` +
-        `/help — Show this help` +
-        (isAdmin ? `\n/admin — Open admin panel` : ''),
+        `/start \u2014 Start the bot\n` +
+        `/menu \u2014 Show main menu\n` +
+        `/help \u2014 Show this help` +
+        (isAdmin ? `\n/admin \u2014 Open admin panel` : ''),
       );
     });
 
@@ -92,7 +106,7 @@ export class BotService {
         return;
       }
 
-      const keyboard = new InlineKeyboard().webApp('🛠 Open Admin Panel', this.adminAppUrl);
+      const keyboard = new InlineKeyboard().webApp('\uD83D\uDEE0 Open Admin Panel', this.adminAppUrl);
       await ctx.reply('Admin access granted. Open the admin panel below:', {
         reply_markup: keyboard,
       });
@@ -106,26 +120,15 @@ export class BotService {
       switch (data) {
         case 'faq':
           await ctx.reply(
-            `*Frequently Asked Questions*\n\n` +
-            `*How do I make a deposit?*\n` +
-            `Open the Mini App, select a network and period, then follow the transfer instructions.\n\n` +
-            `*How long does confirmation take?*\n` +
-            `Deposits are confirmed after the required number of blockchain confirmations (varies by network).\n\n` +
-            `*When do I get my payout?*\n` +
-            `Payouts are processed after the trading period ends and the report is approved.\n\n` +
-            `*What networks are supported?*\n` +
-            `BSC, TRON, TON, ETH, and SOL (check the Mini App for the current list).`,
-            { parse_mode: 'Markdown' },
+            `Ответы на частые вопросы находятся в приложении.\n\n` +
+            `Откройте приложение и перейдите в раздел FAQ.`,
           );
           break;
 
         case 'support':
           await ctx.reply(
-            `To contact support:\n\n` +
-            `1. Open the Mini App and go to Support\n` +
-            `2. Describe your issue\n` +
-            `3. Our team will respond as soon as possible\n\n` +
-            `For urgent matters, include your Telegram ID in the message.`,
+            `Поддержка доступна внутри приложения.\n\n` +
+            `Откройте приложение и перейдите в раздел Support.`,
           );
           break;
 
@@ -136,7 +139,7 @@ export class BotService {
 
     this.bot.on('message:text', async (ctx) => {
       const keyboard = new InlineKeyboard()
-        .webApp('📊 Open Mini App', this.miniAppUrl);
+        .webApp('\uD83D\uDCCA Open Mini App', this.buildMiniAppUrl(ctx.session.referralCode));
 
       await ctx.reply(
         `I didn't understand that. Use /menu to see available options.`,
@@ -162,5 +165,49 @@ export class BotService {
 
   private isAdmin(telegramId: number): boolean {
     return this.adminTelegramIds.has(telegramId);
+  }
+
+  private extractReferralCodeFromStartPayload(payload: string | undefined): string | null {
+    const normalizedPayload = payload?.trim();
+    if (!normalizedPayload?.toLowerCase().startsWith('ref_')) {
+      return null;
+    }
+
+    const referralCode = normalizedPayload.slice(4).trim().toUpperCase();
+    return referralCode || null;
+  }
+
+  private buildMiniAppUrl(referralCode?: string | null): string {
+    if (!referralCode) {
+      return this.miniAppUrl;
+    }
+
+    const url = new URL(this.miniAppUrl);
+    url.searchParams.set('ref', referralCode);
+    return url.toString();
+  }
+
+  private async capturePendingReferral(input: {
+    telegramId: number;
+    referralCode: string;
+    source: string;
+  }): Promise<void> {
+    if (!this.apiBaseUrl || !this.referralCaptureSecret) {
+      return;
+    }
+
+    try {
+      await axios.post(`${this.apiBaseUrl}/referrals/pending`, {
+        telegramId: String(input.telegramId),
+        referralCode: input.referralCode,
+        source: input.source,
+      }, {
+        headers: {
+          'x-referral-capture-secret': this.referralCaptureSecret,
+        },
+      });
+    } catch (error) {
+      console.warn('Failed to capture pending referral payload', error);
+    }
   }
 }

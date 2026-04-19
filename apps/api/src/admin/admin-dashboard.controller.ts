@@ -1,14 +1,13 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../auth/guards/roles.guard';
-import { DepositStatus, PayoutStatus, ReportStatus } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('admin/dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN', 'SUPER_ADMIN')
 export class AdminDashboardController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) {}
 
   @Get('stats')
   async getStats() {
@@ -19,10 +18,10 @@ export class AdminDashboardController {
       pendingReports,
       totalUsers,
     ] = await Promise.all([
-      this.prisma.deposit.count({ where: { status: DepositStatus.ACTIVE } }),
-      this.prisma.deposit.count({ where: { status: DepositStatus.MANUAL_REVIEW } }),
-      this.prisma.payout.count({ where: { status: PayoutStatus.PENDING_APPROVAL } }),
-      this.prisma.profitLossReport.count({ where: { status: ReportStatus.PENDING_APPROVAL } }),
+      this.prisma.deposit.count({ where: { status: 'ACTIVE' as any } }),
+      this.prisma.deposit.count({ where: { status: 'MANUAL_REVIEW' as any } }),
+      this.prisma.payout.count({ where: { status: 'PENDING_APPROVAL' as any } }),
+      this.prisma.profitLossReport.count({ where: { status: 'PENDING_APPROVAL' as any } }),
       this.prisma.user.count(),
     ]);
 

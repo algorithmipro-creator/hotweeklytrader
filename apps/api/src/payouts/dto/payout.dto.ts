@@ -38,6 +38,7 @@ export class PayoutDto {
   payout_id: string;
   deposit_id: string;
   payout_batch_id: string | null;
+  balance_source_summary?: string | null;
   destination_address: string;
   destination_rule: string;
   amount: number;

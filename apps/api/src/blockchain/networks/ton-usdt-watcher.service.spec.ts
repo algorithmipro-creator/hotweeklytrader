@@ -18,6 +18,7 @@ describe('TonUsdtWatcherService', () => {
   const mockPrisma = {
     deposit: {
       findMany: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
     },
     transactionLog: {
@@ -152,7 +153,7 @@ describe('TonUsdtWatcherService', () => {
       where: {
         network: 'TON',
         status: { in: ['AWAITING_TRANSFER', 'DETECTED', 'CONFIRMING'] },
-        source_address: { not: null },
+        OR: [{ source_address: { not: null } }, { ton_deposit_memo: { not: null } }],
       },
     });
     expect(mockDepositsService.transition).toHaveBeenCalledWith('ton-deposit-1', 'DETECTED');
@@ -252,6 +253,49 @@ describe('TonUsdtWatcherService', () => {
         tx_hash: 'ton-tx-3',
       }),
     });
+  });
+
+
+  it('matches a TON deposit by memo even when source address is deferred until after creation', async () => {
+    const exchangeSourceAddress = 'UQAbcEXCHANGEsharedWallet11111111111111111111111';
+
+    mockPrisma.deposit.findMany.mockResolvedValue([
+      {
+        deposit_id: 'deferred-memo-deposit',
+        user_id: 'user-1',
+        source_address: null,
+        ton_deposit_memo: 'TWDEFERRED52FABE44A66ADA847B02AB8F065',
+        status: 'AWAITING_TRANSFER',
+        created_at: new Date('2026-04-03T11:00:00.000Z'),
+        tx_hash: null,
+      },
+    ]);
+    mockPrisma.deposit.update.mockResolvedValue({});
+    mockPrisma.user.findUnique.mockResolvedValue({ user_id: 'user-1' });
+    mockDepositsService.transition.mockResolvedValue({});
+    mockNotificationsService.send.mockResolvedValue({});
+
+    await (service as any).processDetectedTransfer({
+      txHash: 'deferred-memo-ton-tx-1',
+      blockNumber: 123,
+      fromAddress: exchangeSourceAddress,
+      toAddress: 'UQBRa_O3tTbTJK214M3LBXiQelZS9F-IpNesIysbi0B8QB8a',
+      amount: '25',
+      tokenSymbol: 'USDT',
+      confirmations: 0,
+      timestamp: new Date('2026-04-03T12:00:00.000Z'),
+      network: 'TON',
+      memo: 'TWDEFERRED52FABE44A66ADA847B02AB8F065',
+    });
+
+    expect(mockPrisma.deposit.findMany).toHaveBeenCalledWith({
+      where: {
+        network: 'TON',
+        status: { in: ['AWAITING_TRANSFER', 'DETECTED', 'CONFIRMING'] },
+        OR: [{ source_address: { not: null } }, { ton_deposit_memo: { not: null } }],
+      },
+    });
+    expect(mockDepositsService.transition).toHaveBeenCalledWith('deferred-memo-deposit', 'DETECTED');
   });
 
   it('matches a TON deposit by memo even when the exchange source address is shared and untracked', async () => {
@@ -402,6 +446,73 @@ describe('TonUsdtWatcherService', () => {
         source_system: 'blockchain-watcher',
       }),
     });
+  });
+
+  it('does not activate a second TON deposit when the tx hash is already bound to another deposit', async () => {
+    const userSourceAddress = 'UQBURPCkGRJDaQiYF_e9v1WGCEKx7lbcxg_-hNaa_tn5Aw2U';
+    const exchangeSourceAddress = 'UQAbcEXCHANGEsharedWallet44444444444444444444444';
+
+    mockPrisma.deposit.findMany
+      .mockResolvedValueOnce([
+        {
+          deposit_id: 'duplicate-target-deposit',
+          user_id: 'user-6',
+          source_address: userSourceAddress,
+          ton_deposit_memo: 'TWDUPLICATEHASH00047B7952484BC363E',
+          status: 'AWAITING_TRANSFER',
+          created_at: new Date('2026-04-15T14:16:47.051Z'),
+          tx_hash: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          deposit_id: 'duplicate-target-deposit',
+          user_id: 'user-6',
+          source_address: userSourceAddress,
+          ton_deposit_memo: 'TWDUPLICATEHASH00047B7952484BC363E',
+          status: 'AWAITING_TRANSFER',
+          created_at: new Date('2026-04-15T14:16:47.051Z'),
+          tx_hash: null,
+        },
+      ]);
+    mockPrisma.deposit.findFirst.mockResolvedValue({
+      deposit_id: 'already-bound-deposit',
+      tx_hash: 'duplicate-ton-tx',
+    });
+    mockPrisma.deposit.update.mockResolvedValue({});
+    mockPrisma.transactionLog.findFirst.mockResolvedValue(null);
+    mockPrisma.transactionLog.create.mockResolvedValue({});
+    mockPrisma.user.findUnique.mockResolvedValue({ user_id: 'user-6' });
+    mockDepositsService.transition.mockResolvedValue({});
+    mockNotificationsService.send.mockResolvedValue({});
+
+    jest.spyOn(service as any, 'fetchCurrentMasterchainSeqno').mockResolvedValue(120);
+    jest.spyOn(service as any, 'fetchRecentUsdtTransfers').mockResolvedValue([
+      {
+        source: exchangeSourceAddress,
+        destination: 'UQBRa_O3tTbTJK214M3LBXiQelZS9F-IpNesIysbi0B8QB8a',
+        amount: '6000000',
+        jetton_master: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+        transaction_hash: 'duplicate-ton-tx',
+        transaction_lt: '5000',
+        transaction_now: 1776263013,
+      },
+    ]);
+    (service as any).fetchTransactionMemo = jest.fn().mockResolvedValue('TWDUPLICATEHASH00047B7952484BC363E');
+    jest.spyOn(service as any, 'fetchTransactionMcSeqno').mockResolvedValue(114);
+
+    await (service as any).poll();
+
+    expect(mockPrisma.deposit.findFirst).toHaveBeenCalledWith({
+      where: {
+        tx_hash: 'duplicate-ton-tx',
+        deposit_id: { not: 'duplicate-target-deposit' },
+      },
+    });
+    expect(mockDepositsService.transition).not.toHaveBeenCalledWith('duplicate-target-deposit', 'DETECTED');
+    expect(mockPrisma.deposit.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: { deposit_id: 'duplicate-target-deposit' } }),
+    );
   });
 
   it('limits transfer polling to the relevant deposit creation window', () => {

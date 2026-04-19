@@ -17,13 +17,7 @@ export default function DashboardPage() {
   useEffect(() => {
     getAdminDashboardStats()
       .then((data) => {
-        setStats({
-          activeDeposits: data.activeDeposits || 0,
-          pendingReview: data.pendingReview || 0,
-          pendingPayouts: data.pendingPayouts || 0,
-          pendingReports: data.pendingReports || 0,
-          totalUsers: data.totalUsers || 0,
-        });
+        setStats(data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));

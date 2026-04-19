@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Logger } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { Address } from '@ton/core';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateDepositDto, DepositDto, DepositStatus } from './dto/deposit.dto';
+import { CreateDepositDto, DepositDto, DepositStatus, UpdateDepositReturnRoutingDto } from './dto/deposit.dto';
 import { DepositStateMachine } from './deposit-state-machine';
 import { randomUUID } from 'crypto';
 import { TradersService } from '../traders/traders.service';
@@ -74,14 +74,15 @@ export class DepositsService {
       throw new BadRequestException(`Asset ${dto.asset_symbol} is not supported for this network`);
     }
 
-    const normalizedSourceAddress = this.normalizeAddress(dto.network, dto.source_address);
-    const sourceAddressDisplay = this.normalizeDisplayAddress(dto.network, dto.source_address);
-    const normalizedReturnAddress = dto.return_address
-      ? this.normalizeAddress(dto.network, dto.return_address)
-      : null;
-    const returnAddressDisplay = dto.return_address
-      ? this.normalizeDisplayAddress(dto.network, dto.return_address)
-      : null;
+    const isDeferredTonExchangeRouting = dto.network === 'TON' && dto.sending_from_exchange === true;
+    const normalizedSourceAddress = isDeferredTonExchangeRouting
+      ? null
+      : this.normalizeOptionalAddress(dto.network, dto.source_address);
+    const sourceAddressDisplay = isDeferredTonExchangeRouting
+      ? null
+      : this.normalizeOptionalDisplayAddress(dto.network, dto.source_address);
+    const normalizedReturnAddress = this.normalizeOptionalAddress(dto.network, dto.return_address);
+    const returnAddressDisplay = this.normalizeOptionalDisplayAddress(dto.network, dto.return_address);
     const mainAddress = await this.tradersService.resolveMainAddress(
       dto.trader_id,
       dto.network,
@@ -100,10 +101,16 @@ export class DepositsService {
       );
     }
 
-    try {
-      await this.walletsService.findOrCreate(userId, dto.network, dto.source_address, 'SOURCE');
+    if (!isDeferredTonExchangeRouting && !normalizedSourceAddress) {
+      throw new BadRequestException('Source address is required');
+    }
 
-      if (dto.return_address) {
+    try {
+      if (dto.source_address?.trim() && !isDeferredTonExchangeRouting) {
+        await this.walletsService.findOrCreate(userId, dto.network, dto.source_address, 'SOURCE');
+      }
+
+      if (dto.return_address?.trim()) {
         await this.walletsService.findOrCreate(
           userId,
           dto.network,
@@ -183,6 +190,64 @@ export class DepositsService {
     });
 
     return this.serialize(cancelled);
+  }
+
+
+  async updateReturnRouting(
+    depositId: string,
+    userId: string,
+    dto: UpdateDepositReturnRoutingDto,
+  ): Promise<DepositDto> {
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { deposit_id: depositId },
+    });
+
+    if (!deposit || deposit.user_id !== userId) {
+      throw new NotFoundException('Deposit not found');
+    }
+
+    if (this.isReturnRoutingLocked(deposit.status)) {
+      throw new BadRequestException('Return routing can no longer be updated for this deposit');
+    }
+
+    const isExchangeRouting = deposit.network === 'TON' && (!deposit.source_address || Boolean(deposit.return_memo) || Boolean(deposit.return_address));
+    const normalizedSourceAddress = isExchangeRouting
+      ? deposit.source_address ?? null
+      : this.normalizeOptionalAddress(deposit.network, dto.source_address) ?? deposit.source_address ?? null;
+    const sourceAddressDisplay = isExchangeRouting
+      ? deposit.source_address_display ?? null
+      : this.normalizeOptionalDisplayAddress(deposit.network, dto.source_address) ?? deposit.source_address_display ?? null;
+    const normalizedReturnAddress = isExchangeRouting
+      ? this.normalizeOptionalAddress(deposit.network, dto.return_address)
+      : deposit.return_address ?? null;
+    const returnAddressDisplay = isExchangeRouting
+      ? this.normalizeOptionalDisplayAddress(deposit.network, dto.return_address)
+      : deposit.return_address_display ?? null;
+    const returnMemo = isExchangeRouting ? dto.return_memo?.trim() || null : null;
+
+    if (isExchangeRouting && dto.return_address?.trim()) {
+      await this.walletsService.findOrCreate(userId, deposit.network, dto.return_address, 'RETURNING');
+    }
+
+    if (!isExchangeRouting && dto.source_address?.trim()) {
+      await this.walletsService.findOrCreate(userId, deposit.network, dto.source_address, 'SOURCE');
+    }
+
+    const updated = await this.prisma.deposit.update({
+      where: { deposit_id: depositId },
+      data: {
+        source_address: normalizedSourceAddress,
+        source_address_display: sourceAddressDisplay,
+        return_address: normalizedReturnAddress,
+        return_address_display: returnAddressDisplay,
+        return_memo: returnMemo,
+      } as any,
+      include: {
+        trader_main_address: true,
+      },
+    });
+
+    return this.serialize(updated);
   }
 
   async updateSettlementPreference(
@@ -315,6 +380,10 @@ export class DepositsService {
     return ['REPORT_READY', 'PAYOUT_PENDING', 'PAYOUT_APPROVED', 'PAYOUT_SENT', 'PAYOUT_CONFIRMED'].includes(status);
   }
 
+  private isReturnRoutingLocked(status: string): boolean {
+    return ['REPORT_READY', 'PAYOUT_PENDING', 'PAYOUT_APPROVED', 'PAYOUT_SENT', 'PAYOUT_CONFIRMED', 'COMPLETED', 'CANCELLED'].includes(status);
+  }
+
   private getDepositAddress(network: string): string {
     switch (network) {
       case 'BSC':
@@ -341,6 +410,14 @@ export class DepositsService {
     return trimmed.toLowerCase();
   }
 
+  private normalizeOptionalAddress(network: string, address?: string | null): string | null {
+    if (!address?.trim()) {
+      return null;
+    }
+
+    return this.normalizeAddress(network, address);
+  }
+
   private normalizeDisplayAddress(network: string, address: string): string {
     const trimmed = address.trim();
     if (trimmed.length === 0) {
@@ -348,6 +425,14 @@ export class DepositsService {
     }
 
     return network === 'TON' ? trimmed : trimmed;
+  }
+
+  private normalizeOptionalDisplayAddress(network: string, address?: string | null): string | null {
+    if (!address?.trim()) {
+      return null;
+    }
+
+    return this.normalizeDisplayAddress(network, address);
   }
 
   private getDisplayAddress(

@@ -16,26 +16,15 @@ export class AdminDepositsController {
   async findAll(
     @Query('status') status?: string,
     @Query('network') network?: string,
-    @Query('investment_period_id') investmentPeriodId?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     const where: any = {};
     if (status) where.status = status;
     if (network) where.network = network;
-    if (investmentPeriodId) where.investment_period_id = investmentPeriodId;
 
     const deposits = await (this.depositsService as any).prisma.deposit.findMany({
       where,
-      include: {
-        investment_period: {
-          select: {
-            title: true,
-            status: true,
-            investment_period_id: true,
-          },
-        },
-      },
       orderBy: { created_at: 'desc' },
       take: limit ? parseInt(limit, 10) : 50,
       skip: offset ? parseInt(offset, 10) : 0,
@@ -43,8 +32,6 @@ export class AdminDepositsController {
 
     return deposits.map((d: any) => ({
       ...d,
-      investment_period_title: d.investment_period?.title || null,
-      investment_period_status: d.investment_period?.status || null,
       requested_amount: d.requested_amount ? parseFloat(d.requested_amount.toString()) : null,
       confirmed_amount: d.confirmed_amount ? parseFloat(d.confirmed_amount.toString()) : null,
       created_at: d.created_at.toISOString(),
@@ -58,7 +45,15 @@ export class AdminDepositsController {
 
   @Get(':id')
   async findOne(@Param('id') id: string): Promise<DepositDto> {
-    return this.depositsService.findAdminOne(id);
+    const deposit = await (this.depositsService as any).prisma.deposit.findUnique({
+      where: { deposit_id: id },
+    });
+
+    if (!deposit) {
+      throw new Error('Deposit not found');
+    }
+
+    return (this.depositsService as any).serialize(deposit);
   }
 
   @Put(':id/status')

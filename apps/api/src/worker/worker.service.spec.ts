@@ -1,7 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { WorkerService } from './worker.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { PeriodCompletionJob } from './jobs/period-completion.job';
 
 describe('WorkerService', () => {
   let service: WorkerService;
@@ -15,16 +14,11 @@ describe('WorkerService', () => {
     },
   };
 
-  const mockPeriodCompletionJob = {
-    execute: jest.fn(),
-  };
-
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
         WorkerService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: PeriodCompletionJob, useValue: mockPeriodCompletionJob },
       ],
     }).compile();
 

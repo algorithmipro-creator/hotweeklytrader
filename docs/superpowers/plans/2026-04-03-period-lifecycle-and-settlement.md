@@ -272,8 +272,8 @@ Expected: FAIL because the service and persistence model do not exist.
 - [ ] **Step 3: Add the settlement snapshot model and preview service**
 
 ```prisma
-model PeriodSettlementSnapshot {
-  settlement_snapshot_id  String   @id @default(uuid())
+model PeriodSettlement {
+  period_settlement_id    String   @id @default(uuid())
   investment_period_id    String   @unique
   ending_balance_usdt     Decimal
   total_deposits_usdt     Decimal
@@ -370,10 +370,10 @@ Expected: FAIL because the payout registry service and model do not exist.
 - [ ] **Step 3: Add the payout registry persistence model and generator**
 
 ```prisma
-model PeriodPayoutRegistryItem {
-  payout_registry_item_id String   @id @default(uuid())
-  payout_registry_id      String
-  deposit_id              String
+model PeriodPayoutItem {
+  period_payout_item_id   String   @id @default(uuid())
+  investment_period_id    String
+  deposit_id              String   @unique
   network                 String
   asset_symbol            String
   source_address          String
@@ -382,7 +382,7 @@ model PeriodPayoutRegistryItem {
   payout_gross_usdt       Decimal
   payout_fee_usdt         Decimal
   payout_net_usdt         Decimal
-  status                  PayoutStatus @default(PREPARED)
+  status                  String   @default("READY")
   tx_hash                 String?
   sent_at                 DateTime?
   completed_at            DateTime?
@@ -520,7 +520,6 @@ Expected: PASS
 Run: `cmd /c npx prisma migrate dev --schema apps/api/prisma/schema.prisma --name period_lifecycle_and_settlement`
 
 Expected: migration created successfully and Prisma client updated
-Prerequisite: `DATABASE_URL` must be set in the local environment before running this command
 
 - [ ] **Step 4: Smoke-test the admin flow manually**
 
@@ -574,5 +573,5 @@ git commit -m "docs: finalize period lifecycle implementation notes"
 ### Type Consistency
 
 - Period lifecycle names are consistently `FUNDING`, `TRADING_ACTIVE`, `REPORTING`, `PAYOUT_IN_PROGRESS`, `CLOSED`.
-- Settlement storage is consistently named `PeriodSettlementSnapshot`.
-- Payout registry storage is consistently named `PeriodPayoutRegistryItem`.
+- Settlement storage is consistently named `PeriodSettlement`.
+- Payout registry storage is consistently named `PeriodPayoutItem`.

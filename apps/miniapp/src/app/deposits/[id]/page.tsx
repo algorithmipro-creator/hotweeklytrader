@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { cancelDeposit as cancelDepositRequest, getDeposit, updateDepositSettlementPreference } from '../../../lib/api';
+import {
+  cancelDeposit as cancelDepositRequest,
+  getDeposit,
+  updateDepositReturnRouting,
+  updateDepositSettlementPreference,
+} from '../../../lib/api';
 import { AppScreen } from '../../../components/app-screen';
 import { BrandBellLink } from '../../../components/brand-bell-link';
 import { LanguageSwitch } from '../../../components/language-switch';
@@ -46,8 +51,10 @@ export default function DepositDetailPage() {
   const [settlementPreference, setSettlementPreference] = useState('WITHDRAW_ALL');
   const [updatingPreference, setUpdatingPreference] = useState(false);
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
-  const [sourceAddressExpanded, setSourceAddressExpanded] = useState(false);
-  const [returnAddressExpanded, setReturnAddressExpanded] = useState(false);
+  const [isEditingReturnRouting, setIsEditingReturnRouting] = useState(false);
+  const [returnAddressInput, setReturnAddressInput] = useState('');
+  const [returnMemoInput, setReturnMemoInput] = useState('');
+  const [isSavingReturnRouting, setIsSavingReturnRouting] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -55,6 +62,8 @@ export default function DepositDetailPage() {
         .then((nextDeposit) => {
           setDeposit(nextDeposit);
           setSettlementPreference(nextDeposit.settlement_preference || 'WITHDRAW_ALL');
+          setReturnAddressInput(nextDeposit.return_address || nextDeposit.source_address || '');
+          setReturnMemoInput(nextDeposit.return_memo || '');
         })
         .catch(console.error)
         .finally(() => setLoading(false));
@@ -117,6 +126,30 @@ export default function DepositDetailPage() {
     }
   };
 
+  const handleReturnRoutingSave = async () => {
+    if (!deposit?.deposit_id) {
+      return;
+    }
+
+    setIsSavingReturnRouting(true);
+    setPreferenceError(null);
+
+    try {
+      const updatedDeposit = await updateDepositReturnRouting(deposit.deposit_id, {
+        return_address: returnAddressInput.trim() || undefined,
+        return_memo: deposit.network === 'TON' ? returnMemoInput.trim() || undefined : undefined,
+      });
+      setDeposit(updatedDeposit);
+      setReturnAddressInput(updatedDeposit.return_address || '');
+      setReturnMemoInput(updatedDeposit.return_memo || '');
+      setIsEditingReturnRouting(false);
+    } catch (error: any) {
+      setPreferenceError(error?.response?.data?.message || t('depositDetail.updateReturnRoutingFailed'));
+    } finally {
+      setIsSavingReturnRouting(false);
+    }
+  };
+
   if (loading) {
     return <div className="p-4 text-text-secondary">{t('common.loading')}</div>;
   }
@@ -128,6 +161,7 @@ export default function DepositDetailPage() {
   const isSettlementLocked = lockedStatuses.has(deposit.status);
   const selectedSettlementLabel =
     settlementOptions.find((option) => option.value === settlementPreference)?.label ?? t('settlementPreference.withdrawAll');
+  const effectiveReturnAddress = deposit.return_address || deposit.source_address || '';
   const timelineEvents = [
     { label: t('depositDetail.timelineCreated'), date: deposit.created_at, completed: true },
     { label: t('depositDetail.timelineDetected'), date: deposit.detected_at, completed: !!deposit.detected_at },
@@ -181,19 +215,36 @@ export default function DepositDetailPage() {
                 </button>
               </div>
               <p className="mt-3 text-xs text-slate-500">{t('depositDetail.sendWarning')}</p>
+              {deposit.network === 'TON' && deposit.ton_deposit_memo ? (
+                <div className="mt-3 rounded-2xl border border-cyan-300/10 bg-slate-950/70 p-3">
+                  <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{t('depositCreate.tonDepositMemo')}</div>
+                  <div className="mt-2 rounded-2xl border border-amber-300/20 bg-amber-500/10 p-3 text-xs leading-5 text-amber-100">
+                    {t('depositCreate.tonExchangeWarning')}
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={copyTonMemo}
+                      className="flex-1 break-all text-left font-mono text-sm text-cyan-300"
+                    >
+                      {deposit.ton_deposit_memo}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={copyTonMemo}
+                      className="shrink-0 rounded-2xl bg-[linear-gradient(135deg,#46c3e5,#2f93b6)] px-3 py-2 text-xs font-semibold text-slate-50"
+                    >
+                      {memoCopied ? t('common.copied') : t('common.copy')}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">{t('depositCreate.tonDepositMemoNote')}</p>
+                </div>
+              ) : null}
             </div>
           )}
 
           <div className="relative z-10 mt-4 rounded-3xl border border-cyan-300/10 bg-slate-950/60 p-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-2xl border border-cyan-300/10 bg-slate-950/70 p-3">
-                  <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{t('common.network')}</div>
-                <div className="mt-2 font-medium text-slate-100">{deposit.network}</div>
-              </div>
-              <div className="rounded-2xl border border-cyan-300/10 bg-slate-950/70 p-3">
-                  <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{t('common.asset')}</div>
-                <div className="mt-2 font-medium text-slate-100">{deposit.asset_symbol}</div>
-              </div>
               {deposit.confirmed_amount && (
                 <div className="rounded-2xl border border-cyan-300/10 bg-slate-950/70 p-3">
                   <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{t('common.amount')}</div>
@@ -216,33 +267,6 @@ export default function DepositDetailPage() {
                 <div className="mt-2 truncate text-sm text-cyan-300">{deposit.tx_hash}</div>
               </div>
             )}
-
-            {deposit.network === 'TON' && deposit.ton_deposit_memo && (
-              <div className="mt-3 rounded-2xl border border-cyan-300/10 bg-slate-950/70 p-3">
-                <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{t('depositCreate.tonDepositMemo')}</div>
-                <div className="mt-2 rounded-2xl border border-amber-300/20 bg-amber-500/10 p-3 text-xs leading-5 text-amber-100">
-                  {t('depositCreate.tonExchangeWarning')}
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={copyTonMemo}
-                    className="flex-1 break-all text-left font-mono text-sm text-cyan-300"
-                  >
-                    {deposit.ton_deposit_memo}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={copyTonMemo}
-                    className="shrink-0 rounded-2xl bg-[linear-gradient(135deg,#46c3e5,#2f93b6)] px-3 py-2 text-xs font-semibold text-slate-50"
-                  >
-                    {memoCopied ? t('common.copied') : t('common.copy')}
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-slate-500">{t('depositCreate.tonDepositMemoNote')}</p>
-              </div>
-            )}
-
             <div className="mt-3 rounded-2xl border border-cyan-300/10 bg-slate-950/70 p-3">
               <div className="text-xs uppercase tracking-[0.12em] text-slate-500">{t('depositDetail.settlementPreference')}</div>
               <p className="mt-2 text-sm font-medium text-slate-100">{selectedSettlementLabel}</p>
@@ -310,49 +334,82 @@ export default function DepositDetailPage() {
             <Timeline events={timelineEvents} />
           </div>
 
-          {(deposit.source_address || deposit.return_address) && (
-            <div className="relative z-10 mt-4 rounded-3xl border border-cyan-300/10 bg-slate-950/60 p-4">
-              {deposit.source_address && (
-                <div className="rounded-2xl border border-cyan-300/10 bg-slate-950/70">
-                  <button
-                    type="button"
-                    onClick={() => setSourceAddressExpanded((current) => !current)}
-                    className="flex w-full items-center justify-between gap-3 p-3 text-left"
-                  >
-                    <span className="text-sm font-semibold text-slate-100">{t('common.sourceWallet')}</span>
-                    <span className="text-xs uppercase tracking-[0.12em] text-cyan-200/70">
-                      {sourceAddressExpanded ? t('depositDetail.hideAddress') : t('depositDetail.showAddress')}
-                    </span>
-                  </button>
-                  {sourceAddressExpanded && (
-                    <div className="border-t border-cyan-300/10 px-3 pb-3 pt-2">
-                      <div className="break-all font-mono text-sm text-cyan-300">{deposit.source_address}</div>
-                    </div>
-                  )}
+          <div className="relative z-10 mt-4 rounded-3xl border border-cyan-300/10 bg-slate-950/60 p-4">
+            <div className="rounded-2xl border border-cyan-300/10 bg-slate-950/70 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-100">{t('depositDetail.returnAddressForAsset', { asset: deposit.asset_symbol })}</div>
+                  <div className="mt-1 text-xs leading-5 text-slate-400">{t('depositDetail.returnAddressHelp')}</div>
                 </div>
-              )}
+                <button
+                  type="button"
+                  onClick={() => setIsEditingReturnRouting((current) => !current)}
+                  className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-200"
+                >
+                  {isEditingReturnRouting ? t('common.cancel') : t('depositDetail.changeAddress')}
+                </button>
+              </div>
 
-              {deposit.return_address && (
-                <div className="mt-3 rounded-2xl border border-cyan-300/10 bg-slate-950/70">
-                  <button
-                    type="button"
-                    onClick={() => setReturnAddressExpanded((current) => !current)}
-                    className="flex w-full items-center justify-between gap-3 p-3 text-left"
-                  >
-                    <span className="text-sm font-semibold text-slate-100">{t('depositCreate.returningAddress')}</span>
-                    <span className="text-xs uppercase tracking-[0.12em] text-cyan-200/70">
-                      {returnAddressExpanded ? t('depositDetail.hideAddress') : t('depositDetail.showAddress')}
-                    </span>
-                  </button>
-                  {returnAddressExpanded && (
-                    <div className="border-t border-cyan-300/10 px-3 pb-3 pt-2">
-                      <div className="break-all font-mono text-sm text-cyan-300">{deposit.return_address}</div>
-                    </div>
-                  )}
+              {effectiveReturnAddress && !isEditingReturnRouting ? (
+                <div className="mt-3 break-all font-mono text-sm text-cyan-300">{effectiveReturnAddress}</div>
+              ) : null}
+
+              {!effectiveReturnAddress && !isEditingReturnRouting ? (
+                <div className="mt-3 text-sm text-slate-400">
+                  {t('depositDetail.returnAddressEmpty', { asset: deposit.asset_symbol })}
                 </div>
-              )}
+              ) : null}
+
+              {isEditingReturnRouting ? (
+                <div className="mt-3 space-y-3 border-t border-cyan-300/10 pt-3">
+                  <p className="text-sm leading-6 text-slate-400">{t('depositDetail.returnAddressEditHelp', { asset: deposit.asset_symbol })}</p>
+                  <label className="block text-sm text-slate-400">
+                    {t('depositCreate.returningAddress')}
+                    <input
+                      type="text"
+                      value={returnAddressInput}
+                      onChange={(event) => setReturnAddressInput(event.target.value)}
+                      className="mt-1 w-full rounded-2xl border border-cyan-300/10 bg-slate-950/60 p-3 text-sm text-slate-100"
+                      placeholder={t('depositCreate.returningAddress')}
+                    />
+                  </label>
+                  {deposit.network === 'TON' ? (
+                    <label className="block text-sm text-slate-400">
+                      {t('depositCreate.tonReturnMemo')}
+                      <input
+                        type="text"
+                        value={returnMemoInput}
+                        onChange={(event) => setReturnMemoInput(event.target.value)}
+                        className="mt-1 w-full rounded-2xl border border-cyan-300/10 bg-slate-950/60 p-3 text-sm text-slate-100"
+                        placeholder={t('depositCreate.tonReturnMemoHint')}
+                      />
+                    </label>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleReturnRoutingSave}
+                      disabled={isSavingReturnRouting}
+                      className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 disabled:opacity-60"
+                    >
+                      {isSavingReturnRouting ? t('depositDetail.savingAddress') : t('depositDetail.saveAddress')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReturnAddressInput(deposit.return_address || deposit.source_address || '');
+                        setReturnMemoInput(deposit.return_memo || '');
+                        setIsEditingReturnRouting(false);
+                      }}
+                      className="rounded-2xl border border-cyan-300/10 bg-slate-950/60 px-4 py-3 text-sm font-semibold text-slate-200"
+                    >
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
-          )}
+          </div>
 
           <div className="relative z-10 mt-4 rounded-3xl border border-cyan-300/10 bg-slate-950/60 p-4">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-200/70">{t('common.actions')}</h2>

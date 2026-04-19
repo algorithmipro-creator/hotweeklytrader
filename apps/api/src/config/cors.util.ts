@@ -1,16 +1,17 @@
-export function resolveCorsOrigin(corsOrigin: string | undefined): string | string[] {
-  if (!corsOrigin) {
-    return '*';
+export function parseCorsOrigins(value?: string): true | string[] {
+  if (!value) {
+    return true;
   }
 
-  const origins = corsOrigin
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '*') {
+    return true;
+  }
+
+  const origins = trimmed
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-  if (origins.length === 0) {
-    return '*';
-  }
-
-  return origins.length === 1 ? origins[0] : origins;
+  return origins.length > 0 ? origins : true;
 }

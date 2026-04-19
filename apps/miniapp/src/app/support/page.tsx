@@ -2,9 +2,15 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { AppScreen } from '../../components/app-screen';
+import { BrandBellLink } from '../../components/brand-bell-link';
+import { LanguageSwitch } from '../../components/language-switch';
+import { PageBackButton } from '../../components/page-back-button';
+import { useLanguage } from '../../providers/language-provider';
 import { createSupportCase } from '../../lib/api';
 
 export default function SupportPage() {
+  const { t } = useLanguage();
   const [message, setMessage] = useState('');
   const [category, setCategory] = useState('deposit');
   const [submitted, setSubmitted] = useState(false);
@@ -21,68 +27,76 @@ export default function SupportPage() {
       });
       setSubmitted(true);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to submit');
+      setError(err.response?.data?.message || t('support.failedSubmit'));
     }
   };
 
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-bold mb-4">Support</h1>
+    <AppScreen activeTab="support">
+      <div className="relative z-10 rounded-3xl border border-cyan-300/15 bg-slate-950/60 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <PageBackButton fallbackHref="/" />
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.2em] text-cyan-200/70">{t('support.kicker')}</div>
+              <h1 className="mt-2 text-2xl font-bold text-slate-50">{t('support.title')}</h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <BrandBellLink />
+            <LanguageSwitch />
+          </div>
+        </div>
+        <p className="mt-3 text-sm text-slate-400">{t('support.subtitle')}</p>
+      </div>
 
       {error && (
-        <div className="bg-red-500/20 text-red-400 p-3 rounded-lg mb-4 text-sm">
+        <div className="relative z-10 mt-4 rounded-lg bg-red-500/20 p-3 text-sm text-red-400">
           {error}
         </div>
       )}
 
       {submitted ? (
-        <div className="bg-green-500/20 text-green-400 p-4 rounded-lg text-center">
-          <p className="font-medium mb-2">Message Sent!</p>
-          <p className="text-sm">Our team will respond as soon as possible.</p>
-          <Link href="/" className="block text-primary mt-4">
-            &larr; Back to Home
-          </Link>
+        <div className="relative z-10 mt-4 rounded-3xl border border-emerald-300/15 bg-emerald-500/10 p-5 text-center">
+          <p className="font-medium text-emerald-200">{t('support.messageSent')}</p>
+          <p className="mt-2 text-sm text-emerald-100/80">{t('support.messageSentSub')}</p>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="relative z-10 mt-4 space-y-4">
           <div>
-            <label className="block text-sm text-text-secondary mb-1">Category</label>
+            <label className="block text-sm text-text-secondary mb-1">{t('support.category')}</label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full p-3 bg-bg-secondary rounded-lg text-text"
+              className="w-full rounded-lg bg-bg-secondary p-3 text-text"
             >
-              <option value="deposit">Deposit Issue</option>
-              <option value="payout">Payout Issue</option>
-              <option value="report">Report Question</option>
-              <option value="account">Account Issue</option>
-              <option value="other">Other</option>
+              <option value="deposit">{t('support.depositIssue')}</option>
+              <option value="payout">{t('support.payoutIssue')}</option>
+              <option value="report">{t('support.reportQuestion')}</option>
+              <option value="account">{t('support.accountIssue')}</option>
+              <option value="other">{t('support.other')}</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-sm text-text-secondary mb-1">Your Message</label>
+            <label className="block text-sm text-text-secondary mb-1">{t('support.message')}</label>
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="w-full p-3 bg-bg-secondary rounded-lg text-text min-h-[120px]"
-              placeholder="Describe your issue or question..."
+              className="min-h-[120px] w-full rounded-lg bg-bg-secondary p-3 text-text"
+              placeholder={t('support.messagePlaceholder')}
               required
             />
           </div>
 
           <button
             type="submit"
-            className="w-full p-3 bg-primary text-primary-text rounded-lg font-medium"
+            className="w-full rounded-lg bg-primary p-3 font-medium text-primary-text"
           >
-            Send Message
+            {t('support.send')}
           </button>
         </form>
       )}
-
-      <Link href="/" className="block text-center text-primary mt-6">
-        &larr; Back to Home
-      </Link>
-    </div>
+    </AppScreen>
   );
 }

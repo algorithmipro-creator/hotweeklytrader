@@ -9,6 +9,7 @@ describe('PeriodsService', () => {
 
   const mockReferralRewardsService = {
     materializeRewardsForPublishedTraderReport: jest.fn(),
+    previewRewardsForPublishedTraderReport: jest.fn(),
   };
 
   const mockPrisma = {
@@ -37,6 +38,12 @@ describe('PeriodsService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
     },
+    referralReward: {
+      findMany: jest.fn(),
+    },
+    traderPeriodLiveMetrics: {
+      findUnique: jest.fn(),
+    },
     payoutRegistryRow: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -56,8 +63,14 @@ describe('PeriodsService', () => {
     service = (module as any).get(PeriodsService);
     jest.clearAllMocks();
     mockReferralRewardsService.materializeRewardsForPublishedTraderReport.mockReset();
+    mockReferralRewardsService.previewRewardsForPublishedTraderReport.mockReset();
+    mockReferralRewardsService.previewRewardsForPublishedTraderReport.mockResolvedValue([]);
     mockPrisma.profitLossReport.findMany.mockReset();
     mockPrisma.profitLossReport.findMany.mockResolvedValue([]);
+    mockPrisma.referralReward.findMany.mockReset();
+    mockPrisma.referralReward.findMany.mockResolvedValue([]);
+    mockPrisma.traderPeriodLiveMetrics.findUnique.mockReset();
+    mockPrisma.traderPeriodLiveMetrics.findUnique.mockResolvedValue(null);
   });
 
   it('should be defined', () => {
@@ -576,7 +589,9 @@ describe('PeriodsService', () => {
             confirmed_amount: '600',
             requested_amount: null,
             source_address: 'source-1',
+            source_address_display: 'tron-source-display-1',
             return_address: null,
+            return_address_display: null,
           },
           {
             deposit_id: 'dep-2',
@@ -588,6 +603,8 @@ describe('PeriodsService', () => {
             requested_amount: null,
             source_address: 'source-2',
             return_address: 'return-2',
+            source_address_display: 'ton-source-display-2',
+            return_address_display: 'ton-return-display-2',
           },
         ]);
 
@@ -604,8 +621,336 @@ describe('PeriodsService', () => {
       expect(preview.total_network_fees_usdt).toBe(15);
       expect(preview.net_distributable_usdt).toBe(1105);
       expect(preview.rows).toHaveLength(2);
-      expect(preview.rows[1].selected_payout_address).toBe('return-2');
+      expect(preview.rows[1].selected_payout_address).toBe('ton-return-display-2');
       expect(preview.rows[1].address_source).toBe('RETURN_ADDRESS');
+    });
+  });
+
+  describe('getTraderReportBuilder', () => {
+    it('returns projected referral totals before publish and materialized totals after publish', async () => {
+      mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
+        investment_period_id: 'period-1',
+      });
+      mockPrisma.deposit.findMany
+        .mockResolvedValueOnce([
+          {
+            trader_id: 'trader-1',
+            trader: { trader_id: 'trader-1', nickname: 'alpha', slug: 'alpha', display_name: 'Alpha' },
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            deposit_id: 'dep-1',
+            user_id: 'user-1',
+            investment_period_id: 'period-1',
+            trader_id: 'trader-1',
+            trader_main_address_id: 'addr-1',
+            network: 'TRON',
+            asset_symbol: 'USDT',
+            confirmed_amount: '600',
+            requested_amount: null,
+            source_address: 'source-1',
+            source_address_display: 'tron-source-display-1',
+            return_address: null,
+            return_address_display: null,
+            ton_deposit_memo: null,
+            return_memo: null,
+            settlement_preference: 'WITHDRAW_ALL',
+            auto_renew_trader_id_snapshot: null,
+            auto_renew_network_snapshot: null,
+            auto_renew_asset_symbol_snapshot: null,
+            rolled_over_into_deposit_id: null,
+            rollover_source_deposit_id: null,
+            rollover_attempted_at: null,
+            rollover_block_reason: null,
+            user: {
+              user_id: 'user-1',
+              username: 'alice',
+              display_name: 'Alice',
+            },
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            trader_id: 'trader-1',
+            trader: { trader_id: 'trader-1', nickname: 'alpha', slug: 'alpha', display_name: 'Alpha' },
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            deposit_id: 'dep-1',
+            user_id: 'user-1',
+            investment_period_id: 'period-1',
+            trader_id: 'trader-1',
+            trader_main_address_id: 'addr-1',
+            network: 'TRON',
+            asset_symbol: 'USDT',
+            confirmed_amount: '600',
+            requested_amount: null,
+            source_address: 'source-1',
+            source_address_display: 'tron-source-display-1',
+            return_address: null,
+            return_address_display: null,
+            ton_deposit_memo: null,
+            return_memo: null,
+            settlement_preference: 'WITHDRAW_ALL',
+            auto_renew_trader_id_snapshot: null,
+            auto_renew_network_snapshot: null,
+            auto_renew_asset_symbol_snapshot: null,
+            rolled_over_into_deposit_id: null,
+            rollover_source_deposit_id: null,
+            rollover_attempted_at: null,
+            rollover_block_reason: null,
+            user: {
+              user_id: 'user-1',
+              username: 'alice',
+              display_name: 'Alice',
+            },
+          },
+        ]);
+      mockPrisma.periodTraderReport.findUnique
+        .mockResolvedValueOnce({
+          trader_report_id: 'report-1',
+          investment_period_id: 'period-1',
+          trader_id: 'trader-1',
+          status: 'APPROVED',
+          ending_balance_usdt: '1200',
+          trader_fee_percent: '40',
+          network_fees_json: { TRON: 10, TON: 5, BSC: 0 },
+          generated_by: 'admin-1',
+          approved_by: 'admin-2',
+          approved_at: new Date('2026-04-06T10:12:00.000Z'),
+          published_at: null,
+          created_at: new Date('2026-04-06T10:00:00.000Z'),
+          updated_at: new Date('2026-04-06T10:12:00.000Z'),
+          trader: { trader_id: 'trader-1', nickname: 'alpha', slug: 'alpha', display_name: 'Alpha' },
+        })
+        .mockResolvedValueOnce({
+          trader_report_id: 'report-1',
+          investment_period_id: 'period-1',
+          trader_id: 'trader-1',
+          status: 'PUBLISHED',
+          ending_balance_usdt: '1200',
+          trader_fee_percent: '40',
+          network_fees_json: { TRON: 10, TON: 5, BSC: 0 },
+          generated_by: 'admin-1',
+          approved_by: 'admin-2',
+          approved_at: new Date('2026-04-06T10:12:00.000Z'),
+          published_at: new Date('2026-04-06T10:30:00.000Z'),
+          created_at: new Date('2026-04-06T10:00:00.000Z'),
+          updated_at: new Date('2026-04-06T10:30:00.000Z'),
+          trader: { trader_id: 'trader-1', nickname: 'alpha', slug: 'alpha', display_name: 'Alpha' },
+        });
+      mockReferralRewardsService.previewRewardsForPublishedTraderReport.mockResolvedValue([
+        {
+          source_deposit_id: 'dep-1',
+          reward_type: 'FIRST_DEPOSIT',
+          reward_amount: 3.6,
+        },
+        {
+          source_deposit_id: 'dep-1',
+          reward_type: 'PERIOD_PROFIT',
+          reward_amount: 4.41,
+        },
+      ]);
+      mockPrisma.referralReward.findMany.mockResolvedValue([
+        {
+          source_deposit_id: 'dep-1',
+          reward_type: 'FIRST_DEPOSIT',
+          reward_amount: '5.25',
+        },
+      ]);
+      mockPrisma.payoutRegistry.findUnique.mockResolvedValue(null);
+
+      const projectedBuilder = await (service as any).getTraderReportBuilder('period-1', 'trader-1');
+      const materializedBuilder = await (service as any).getTraderReportBuilder('period-1', 'trader-1');
+
+      expect(projectedBuilder.referral_mode).toBe('PROJECTED');
+      expect(projectedBuilder.rows[0]).toMatchObject({
+        referral_first_deposit_usdt: 3.6,
+        referral_period_profit_usdt: 4.41,
+        referral_reward_total_usdt: 8.01,
+      });
+      expect(mockReferralRewardsService.previewRewardsForPublishedTraderReport).toHaveBeenCalledWith('report-1', 'period-1');
+      expect(materializedBuilder.referral_mode).toBe('MATERIALIZED');
+      expect(materializedBuilder.rows[0]).toMatchObject({
+        referral_first_deposit_usdt: 5.25,
+        referral_period_profit_usdt: 0,
+        referral_reward_total_usdt: 5.25,
+      });
+    });
+
+    it('returns enriched builder payload with user cycle rows, referral totals, and algorithm metrics', async () => {
+      mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
+        investment_period_id: 'period-1',
+      });
+      mockPrisma.deposit.findMany
+        .mockResolvedValueOnce([
+          {
+            trader_id: 'trader-1',
+            trader: { trader_id: 'trader-1', nickname: 'alpha', slug: 'alpha', display_name: 'Alpha' },
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            deposit_id: 'dep-1',
+            user_id: 'user-1',
+            investment_period_id: 'period-1',
+            trader_id: 'trader-1',
+            trader_main_address_id: 'addr-1',
+            network: 'TRON',
+            asset_symbol: 'USDT',
+            confirmed_amount: '600',
+            requested_amount: null,
+            source_address: 'source-1',
+            source_address_display: 'tron-source-display-1',
+            return_address: null,
+            return_address_display: null,
+            ton_deposit_memo: null,
+            return_memo: null,
+            settlement_preference: 'WITHDRAW_ALL',
+            auto_renew_trader_id_snapshot: null,
+            auto_renew_network_snapshot: null,
+            auto_renew_asset_symbol_snapshot: null,
+            rolled_over_into_deposit_id: null,
+            rollover_source_deposit_id: null,
+            rollover_attempted_at: null,
+            rollover_block_reason: null,
+            user: {
+              user_id: 'user-1',
+              username: 'alice',
+              display_name: 'Alice',
+            },
+          },
+          {
+            deposit_id: 'dep-2',
+            user_id: 'user-2',
+            investment_period_id: 'period-1',
+            trader_id: 'trader-1',
+            trader_main_address_id: 'addr-1',
+            network: 'TON',
+            asset_symbol: 'USDT',
+            confirmed_amount: '400',
+            requested_amount: null,
+            source_address: 'source-2',
+            return_address: 'return-2',
+            source_address_display: 'ton-source-display-2',
+            return_address_display: 'ton-return-display-2',
+            ton_deposit_memo: null,
+            return_memo: null,
+            settlement_preference: 'WITHDRAW_ALL',
+            auto_renew_trader_id_snapshot: null,
+            auto_renew_network_snapshot: null,
+            auto_renew_asset_symbol_snapshot: null,
+            rolled_over_into_deposit_id: null,
+            rollover_source_deposit_id: null,
+            rollover_attempted_at: null,
+            rollover_block_reason: null,
+            user: {
+              user_id: 'user-2',
+              username: 'bob',
+              display_name: null,
+            },
+          },
+        ]);
+      mockPrisma.periodTraderReport.findUnique.mockResolvedValue({
+        trader_report_id: 'report-1',
+        investment_period_id: 'period-1',
+        trader_id: 'trader-1',
+        status: 'APPROVED',
+        ending_balance_usdt: '1200',
+        trader_fee_percent: '40',
+        network_fees_json: { TRON: 10, TON: 5, BSC: 0 },
+        generated_by: 'admin-1',
+        approved_by: 'admin-2',
+        approved_at: new Date('2026-04-06T10:12:00.000Z'),
+        published_at: null,
+        created_at: new Date('2026-04-06T10:00:00.000Z'),
+        updated_at: new Date('2026-04-06T10:12:00.000Z'),
+        trader: { trader_id: 'trader-1', nickname: 'alpha', slug: 'alpha', display_name: 'Alpha' },
+      });
+      mockReferralRewardsService.previewRewardsForPublishedTraderReport.mockResolvedValue([
+        {
+          source_deposit_id: 'dep-1',
+          reward_type: 'FIRST_DEPOSIT',
+          reward_amount: 3.6,
+        },
+        {
+          source_deposit_id: 'dep-1',
+          reward_type: 'PERIOD_PROFIT',
+          reward_amount: 4.41,
+        },
+        {
+          source_deposit_id: 'dep-2',
+          reward_type: 'FIRST_DEPOSIT',
+          reward_amount: 2.4,
+        },
+      ]);
+      mockPrisma.traderPeriodLiveMetrics.findUnique.mockResolvedValue({
+        trader_id: 'trader-1',
+        investment_period_id: 'period-1',
+        source_type: 'MT5',
+        profit_percent: '20.0000',
+        trade_count: 14,
+        win_rate: '71.4300',
+        captured_at: new Date('2026-04-06T10:30:00.000Z'),
+      });
+      mockPrisma.payoutRegistry.findUnique.mockResolvedValue({
+        payout_registry_id: 'registry-1',
+        rows: [
+          { status: 'PENDING' },
+          { status: 'PAID_MANUAL' },
+        ],
+      });
+
+      const builder = await (service as any).getTraderReportBuilder('period-1', 'trader-1');
+
+      expect(builder).toMatchObject({
+        investment_period_id: 'period-1',
+        trader_id: 'trader-1',
+        referral_mode: 'PROJECTED',
+        deposit_count: 2,
+        starting_balance_usdt: 1000,
+        ending_balance_usdt: 1200,
+        realized_profit_usdt: 200,
+        period_balance_before_fees_usdt: 1200,
+        trader_fee_percent: 40,
+        trader_fee_usdt: 80,
+        total_network_fees_usdt: 15,
+        net_distributable_usdt: 1105,
+        metrics_summary: {
+          source_type: 'MT5',
+          trade_count: 14,
+          pnl: 200,
+          profit_percent: 20,
+          win_rate: 71.43,
+        },
+        registry_summary: {
+          payout_registry_id: 'registry-1',
+          exists: true,
+          row_count: 2,
+          terminal_row_count: 1,
+          pending_row_count: 1,
+        },
+      });
+      expect(builder.rows).toHaveLength(2);
+      expect(builder.rows[0]).toMatchObject({
+        deposit_id: 'dep-1',
+        user_id: 'user-1',
+        user_label: 'Alice',
+        confirmed_amount_usdt: 600,
+        referral_first_deposit_usdt: 3.6,
+        referral_period_profit_usdt: 4.41,
+        referral_reward_total_usdt: 8.01,
+      });
+      expect(builder.rows[1]).toMatchObject({
+        deposit_id: 'dep-2',
+        user_id: 'user-2',
+        user_label: '@bob',
+        selected_payout_address: 'ton-return-display-2',
+        address_source: 'RETURN_ADDRESS',
+        referral_reward_total_usdt: 2.4,
+      });
     });
   });
 
@@ -640,7 +985,9 @@ describe('PeriodsService', () => {
           confirmed_amount: '1000',
           requested_amount: null,
           source_address: 'source-1',
+          source_address_display: 'tron-source-display-1',
           return_address: null,
+          return_address_display: null,
         },
       ]);
 
@@ -649,6 +996,8 @@ describe('PeriodsService', () => {
       expect(csv).toContain('trader_nickname,alpha');
       expect(csv).toContain('deposit_id,network,asset_symbol,deposit_amount_usdt');
       expect(csv).toContain('dep-1,TRON,USDT,1000');
+      expect(csv).toContain('tron-source-display-1,SOURCE_ADDRESS');
+      expect(csv).not.toContain('source-1,SOURCE_ADDRESS');
     });
   });
 
@@ -684,7 +1033,9 @@ describe('PeriodsService', () => {
           confirmed_amount: '1000',
           requested_amount: null,
           source_address: 'source-1',
+          source_address_display: 'tron-source-display-1',
           return_address: null,
+          return_address_display: null,
         },
       ]);
       mockPrisma.payoutRegistry.create.mockResolvedValue({
@@ -710,8 +1061,8 @@ describe('PeriodsService', () => {
             payout_gross_usdt: '705',
             payout_fee_usdt: '10',
             payout_net_usdt: '695',
-            default_payout_address: 'source-1',
-            selected_payout_address: 'source-1',
+            default_payout_address: 'tron-source-display-1',
+            selected_payout_address: 'tron-source-display-1',
             address_source: 'SOURCE_ADDRESS',
             status: 'PENDING',
             tx_hash: null,
@@ -720,6 +1071,14 @@ describe('PeriodsService', () => {
             notes: null,
             created_at: new Date('2026-04-06T10:20:00.000Z'),
             updated_at: new Date('2026-04-06T10:20:00.000Z'),
+            deposit: {
+              user_id: 'user-1',
+              user: {
+                user_id: 'user-1',
+                username: 'alice',
+                display_name: 'Alice',
+              },
+            },
           },
         ],
       });
@@ -729,6 +1088,23 @@ describe('PeriodsService', () => {
       expect(registry.payout_registry_id).toBe('registry-1');
       expect(registry.rows).toHaveLength(1);
       expect(registry.rows[0].status).toBe('PENDING');
+      expect(registry.rows[0]).toMatchObject({
+        user_id: 'user-1',
+        user_label: 'Alice',
+        selected_payout_address: 'tron-source-display-1',
+      });
+      expect(mockPrisma.payoutRegistry.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          rows: {
+            create: [
+              expect.objectContaining({
+                default_payout_address: 'tron-source-display-1',
+                selected_payout_address: 'tron-source-display-1',
+              }),
+            ],
+          },
+        }),
+      }));
       expect(mockPrisma.payoutRegistry.create).toHaveBeenCalled();
     });
   });
@@ -954,32 +1330,67 @@ describe('PeriodsService', () => {
 
   describe('updatePayoutRegistryRow', () => {
     it('marks one payout registry row as paid manually with optional tx hash and note', async () => {
-      mockPrisma.payoutRegistryRow.findUnique.mockResolvedValue({
-        payout_registry_row_id: 'row-1',
-        payout_registry_id: 'registry-1',
-        investment_period_id: 'period-1',
-        trader_report_id: 'report-1',
-        deposit_id: 'dep-1',
-        trader_id: 'trader-1',
-        trader_nickname: 'alpha',
-        network: 'TRON',
-        asset_symbol: 'USDT',
-        deposit_amount_usdt: '1000',
-        share_ratio: '1',
-        payout_gross_usdt: '705',
-        payout_fee_usdt: '10',
-        payout_net_usdt: '695',
-        default_payout_address: 'source-1',
-        selected_payout_address: 'source-1',
-        address_source: 'SOURCE_ADDRESS',
-        status: 'PENDING',
-        tx_hash: null,
-        paid_at: null,
-        failure_reason: null,
-        notes: null,
-        created_at: new Date('2026-04-06T10:20:00.000Z'),
-        updated_at: new Date('2026-04-06T10:20:00.000Z'),
-      });
+      mockPrisma.payoutRegistryRow.findUnique
+        .mockResolvedValueOnce({
+          payout_registry_row_id: 'row-1',
+          payout_registry_id: 'registry-1',
+          investment_period_id: 'period-1',
+          trader_report_id: 'report-1',
+          deposit_id: 'dep-1',
+          trader_id: 'trader-1',
+          trader_nickname: 'alpha',
+          network: 'TRON',
+          asset_symbol: 'USDT',
+          deposit_amount_usdt: '1000',
+          share_ratio: '1',
+          payout_gross_usdt: '705',
+          payout_fee_usdt: '10',
+          payout_net_usdt: '695',
+          default_payout_address: 'source-1',
+          selected_payout_address: 'source-1',
+          address_source: 'SOURCE_ADDRESS',
+          status: 'PENDING',
+          tx_hash: null,
+          paid_at: null,
+          failure_reason: null,
+          notes: null,
+          created_at: new Date('2026-04-06T10:20:00.000Z'),
+          updated_at: new Date('2026-04-06T10:20:00.000Z'),
+        })
+        .mockResolvedValueOnce({
+          payout_registry_row_id: 'row-1',
+          payout_registry_id: 'registry-1',
+          investment_period_id: 'period-1',
+          trader_report_id: 'report-1',
+          deposit_id: 'dep-1',
+          trader_id: 'trader-1',
+          trader_nickname: 'alpha',
+          network: 'TRON',
+          asset_symbol: 'USDT',
+          deposit_amount_usdt: '1000',
+          share_ratio: '1',
+          payout_gross_usdt: '705',
+          payout_fee_usdt: '10',
+          payout_net_usdt: '695',
+          default_payout_address: 'source-1',
+          selected_payout_address: 'source-1',
+          address_source: 'SOURCE_ADDRESS',
+          status: 'PAID_MANUAL',
+          tx_hash: 'tx-1',
+          paid_at: new Date('2026-04-06T11:00:00.000Z'),
+          failure_reason: null,
+          notes: 'paid on chain',
+          created_at: new Date('2026-04-06T10:20:00.000Z'),
+          updated_at: new Date('2026-04-06T11:00:00.000Z'),
+          deposit: {
+            user_id: 'user-1',
+            user: {
+              user_id: 'user-1',
+              username: 'alice',
+              display_name: 'Alice',
+            },
+          },
+        });
       mockPrisma.payoutRegistryRow.update.mockResolvedValue({
         payout_registry_row_id: 'row-1',
         payout_registry_id: 'registry-1',
@@ -1016,35 +1427,71 @@ describe('PeriodsService', () => {
       expect(row.status).toBe('PAID_MANUAL');
       expect(row.tx_hash).toBe('tx-1');
       expect(row.notes).toBe('paid on chain');
+      expect(row.user_label).toBe('Alice');
     });
 
     it('allows payout address override without changing frozen financial amounts', async () => {
-      mockPrisma.payoutRegistryRow.findUnique.mockResolvedValue({
-        payout_registry_row_id: 'row-1',
-        payout_registry_id: 'registry-1',
-        investment_period_id: 'period-1',
-        trader_report_id: 'report-1',
-        deposit_id: 'dep-1',
-        trader_id: 'trader-1',
-        trader_nickname: 'alpha',
-        network: 'TRON',
-        asset_symbol: 'USDT',
-        deposit_amount_usdt: '1000',
-        share_ratio: '1',
-        payout_gross_usdt: '705',
-        payout_fee_usdt: '10',
-        payout_net_usdt: '695',
-        default_payout_address: 'source-1',
-        selected_payout_address: 'source-1',
-        address_source: 'SOURCE_ADDRESS',
-        status: 'PENDING',
-        tx_hash: null,
-        paid_at: null,
-        failure_reason: null,
-        notes: null,
-        created_at: new Date('2026-04-06T10:20:00.000Z'),
-        updated_at: new Date('2026-04-06T10:20:00.000Z'),
-      });
+      mockPrisma.payoutRegistryRow.findUnique
+        .mockResolvedValueOnce({
+          payout_registry_row_id: 'row-1',
+          payout_registry_id: 'registry-1',
+          investment_period_id: 'period-1',
+          trader_report_id: 'report-1',
+          deposit_id: 'dep-1',
+          trader_id: 'trader-1',
+          trader_nickname: 'alpha',
+          network: 'TRON',
+          asset_symbol: 'USDT',
+          deposit_amount_usdt: '1000',
+          share_ratio: '1',
+          payout_gross_usdt: '705',
+          payout_fee_usdt: '10',
+          payout_net_usdt: '695',
+          default_payout_address: 'source-1',
+          selected_payout_address: 'source-1',
+          address_source: 'SOURCE_ADDRESS',
+          status: 'PENDING',
+          tx_hash: null,
+          paid_at: null,
+          failure_reason: null,
+          notes: null,
+          created_at: new Date('2026-04-06T10:20:00.000Z'),
+          updated_at: new Date('2026-04-06T10:20:00.000Z'),
+        })
+        .mockResolvedValueOnce({
+          payout_registry_row_id: 'row-1',
+          payout_registry_id: 'registry-1',
+          investment_period_id: 'period-1',
+          trader_report_id: 'report-1',
+          deposit_id: 'dep-1',
+          trader_id: 'trader-1',
+          trader_nickname: 'alpha',
+          network: 'TRON',
+          asset_symbol: 'USDT',
+          deposit_amount_usdt: '1000',
+          share_ratio: '1',
+          payout_gross_usdt: '705',
+          payout_fee_usdt: '10',
+          payout_net_usdt: '695',
+          default_payout_address: 'source-1',
+          selected_payout_address: 'override-1',
+          address_source: 'MANUAL_OVERRIDE',
+          status: 'PENDING',
+          tx_hash: null,
+          paid_at: null,
+          failure_reason: null,
+          notes: null,
+          created_at: new Date('2026-04-06T10:20:00.000Z'),
+          updated_at: new Date('2026-04-06T10:30:00.000Z'),
+          deposit: {
+            user_id: 'user-1',
+            user: {
+              user_id: 'user-1',
+              username: 'alice',
+              display_name: 'Alice',
+            },
+          },
+        });
       mockPrisma.payoutRegistryRow.update.mockResolvedValue({
         payout_registry_row_id: 'row-1',
         payout_registry_id: 'registry-1',
@@ -1079,6 +1526,7 @@ describe('PeriodsService', () => {
       expect(row.selected_payout_address).toBe('override-1');
       expect(row.address_source).toBe('MANUAL_OVERRIDE');
       expect(row.payout_net_usdt).toBe(695);
+      expect(row.user_label).toBe('Alice');
     });
   });
 

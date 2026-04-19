@@ -1,6 +1,7 @@
 import {
   Controller, Get, Post, Body, Param, UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { SupportService } from './support.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -22,6 +23,7 @@ export class SupportController {
   }
 
   @Post()
+  @Throttle({ default: { limit: 5, ttl: 300_000 } })
   async create(
     @Body() dto: CreateSupportCaseDto,
     @CurrentUser() user: any,

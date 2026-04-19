@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getAdminDeposit, transitionDeposit } from '../../../lib/api';
-import { StatusBadge } from '../../../components/status-badge';
+import { StatusBadge, getStatusLabel } from '../../../components/status-badge';
+import { DepositHeaderActions } from './deposit-header-actions';
 
 const ALL_STATUSES = [
   'CREATED', 'AWAITING_TRANSFER', 'DETECTED', 'CONFIRMING', 'CONFIRMED',
@@ -38,13 +39,16 @@ export default function AdminDepositDetailPage() {
   };
 
   if (loading) return <div className="text-text-secondary">Loading...</div>;
-  if (!deposit) return <div className="text-danger">Deposit not found</div>;
+  if (!deposit) return <div className="text-danger">Cycle not found</div>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Deposit {deposit.deposit_id.slice(0, 8)}...</h1>
-        <StatusBadge status={deposit.status} />
+        <h1 className="text-2xl font-bold">Cycle {deposit.deposit_id.slice(0, 8)}...</h1>
+        <div className="flex items-center gap-3">
+          <DepositHeaderActions userId={deposit.user_id} />
+          <StatusBadge status={deposit.status} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -53,10 +57,13 @@ export default function AdminDepositDetailPage() {
           <div className="space-y-2 text-sm">
             <div><span className="text-text-secondary">Network:</span> {deposit.network}</div>
             <div><span className="text-text-secondary">Asset:</span> {deposit.asset_symbol}</div>
-            <div><span className="text-text-secondary">Amount:</span> {deposit.confirmed_amount || '—'}</div>
-            <div><span className="text-text-secondary">TX Hash:</span> {deposit.tx_hash || '—'}</div>
+            <div><span className="text-text-secondary">Amount:</span> {deposit.confirmed_amount || '-'}</div>
+            <div><span className="text-text-secondary">Trader:</span> {deposit.trader_id || '-'}</div>
+            <div><span className="text-text-secondary">Trader Main Address:</span> {deposit.trader_main_address_id || '-'}</div>
+            <div><span className="text-text-secondary">TX Hash:</span> {deposit.tx_hash || '-'}</div>
             <div><span className="text-text-secondary">Route:</span> <span className="font-mono text-xs">{deposit.deposit_route}</span></div>
-            <div><span className="text-text-secondary">Source:</span> {deposit.source_address || '—'}</div>
+            <div><span className="text-text-secondary">Source:</span> {deposit.source_address || '-'}</div>
+            <div><span className="text-text-secondary">Return:</span> {deposit.return_address || '-'}</div>
             <div><span className="text-text-secondary">Confirmations:</span> {deposit.confirmation_count}/{deposit.min_required_confirmations}</div>
           </div>
         </div>
@@ -64,11 +71,11 @@ export default function AdminDepositDetailPage() {
         <div className="bg-bg-secondary rounded-lg p-4">
           <h2 className="font-medium mb-3">Dates</h2>
           <div className="space-y-2 text-sm">
-            <div><span className="text-text-secondary">Created:</span> {deposit.created_at ? new Date(deposit.created_at).toLocaleString() : '—'}</div>
-            <div><span className="text-text-secondary">Detected:</span> {deposit.detected_at ? new Date(deposit.detected_at).toLocaleString() : '—'}</div>
-            <div><span className="text-text-secondary">Confirmed:</span> {deposit.confirmed_at ? new Date(deposit.confirmed_at).toLocaleString() : '—'}</div>
-            <div><span className="text-text-secondary">Activated:</span> {deposit.activated_at ? new Date(deposit.activated_at).toLocaleString() : '—'}</div>
-            <div><span className="text-text-secondary">Completed:</span> {deposit.completed_at ? new Date(deposit.completed_at).toLocaleString() : '—'}</div>
+            <div><span className="text-text-secondary">Created:</span> {deposit.created_at ? new Date(deposit.created_at).toLocaleString() : '-'}</div>
+            <div><span className="text-text-secondary">Detected:</span> {deposit.detected_at ? new Date(deposit.detected_at).toLocaleString() : '-'}</div>
+            <div><span className="text-text-secondary">Confirmed:</span> {deposit.confirmed_at ? new Date(deposit.confirmed_at).toLocaleString() : '-'}</div>
+            <div><span className="text-text-secondary">Activated:</span> {deposit.activated_at ? new Date(deposit.activated_at).toLocaleString() : '-'}</div>
+            <div><span className="text-text-secondary">Completed:</span> {deposit.completed_at ? new Date(deposit.completed_at).toLocaleString() : '-'}</div>
           </div>
         </div>
       </div>
@@ -82,7 +89,7 @@ export default function AdminDepositDetailPage() {
           >
             <option value="">Select target status...</option>
             {ALL_STATUSES.map((s) => (
-              <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+              <option key={s} value={s}>{getStatusLabel(s)}</option>
             ))}
           </select>
           <button
@@ -105,7 +112,7 @@ export default function AdminDepositDetailPage() {
       </div>
 
       <Link href="/deposits" className="text-primary text-sm hover:underline">
-        &larr; Back to Deposits
+        &larr; Back to Cycles
       </Link>
     </div>
   );

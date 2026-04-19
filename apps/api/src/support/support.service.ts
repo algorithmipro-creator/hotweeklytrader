@@ -57,18 +57,18 @@ export class SupportService {
     const [cases, total] = await Promise.all([
       this.prisma.supportCase.findMany({
         where,
-        orderBy: { created_at: 'desc' },
-        take: filters.limit || 50,
-        skip: filters.offset || 0,
         include: {
           user: {
             select: {
-              display_name: true,
-              username: true,
               telegram_id: true,
+              username: true,
+              display_name: true,
             },
           },
         },
+        orderBy: { created_at: 'desc' },
+        take: filters.limit || 50,
+        skip: filters.offset || 0,
       }),
       this.prisma.supportCase.count({ where }),
     ]);
@@ -97,11 +97,9 @@ export class SupportService {
     return {
       case_id: supportCase.case_id,
       user_id: supportCase.user_id,
-      user_display_name: supportCase.user?.display_name || null,
+      user_telegram_id: supportCase.user?.telegram_id?.toString() || null,
       user_username: supportCase.user?.username || null,
-      user_telegram_id: supportCase.user?.telegram_id != null
-        ? supportCase.user.telegram_id.toString()
-        : null,
+      user_display_name: supportCase.user?.display_name || null,
       related_deposit_id: supportCase.related_deposit_id,
       category: supportCase.category,
       priority: supportCase.priority,

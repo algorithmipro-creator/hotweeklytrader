@@ -1,8 +1,17 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, {
+  createContext, useContext, useState, useEffect, ReactNode, useRef,
+} from 'react';
 import { authenticateTelegram, getProfile } from '../lib/api';
-import { getInitData } from '../lib/telegram';
+import {
+  getInitData,
+  getReferralCodeFromUrl,
+  getStartParam,
+  initTelegramWebApp,
+  waitForTelegramInitData,
+} from '../lib/telegram';
+import { useLanguage } from './language-provider';
 
 interface User {
   user_id: string;
@@ -25,17 +34,29 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { t } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const authStartedRef = useRef(false);
 
   useEffect(() => {
+    if (authStartedRef.current) {
+      return;
+    }
+
+    authStartedRef.current = true;
+
     async function authenticate() {
       try {
-        const initData = getInitData();
+        initTelegramWebApp();
+        const initData = getInitData() || await waitForTelegramInitData();
+        const startParam = getStartParam();
+        const referralCodeFromStartParam = startParam?.startsWith('ref_') ? startParam.slice(4) : null;
+        const referralCode = getReferralCodeFromUrl() || referralCodeFromStartParam;
 
         if (!initData) {
-          setError('Telegram Web App data not available');
+          setError(t('auth.telegramUnavailable'));
           setLoading(false);
           return;
         }
@@ -52,10 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        const result = await authenticateTelegram(initData);
+        const result = await authenticateTelegram(initData, referralCode);
         setUser(result.user);
       } catch (err: any) {
-        setError(err.response?.data?.message || 'Authentication failed');
+        setError(err.response?.data?.message || t('auth.failed'));
       } finally {
         setLoading(false);
       }

@@ -6,6 +6,7 @@ export class WalletDto {
   network: string;
   source_address: string;
   payout_address: string | null;
+  wallet_role: string;
   verification_status: string;
   first_seen_at: string;
   last_used_at: string | null;

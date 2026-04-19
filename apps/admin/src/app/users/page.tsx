@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { getAdminUsers, updateUserStatus } from '../../lib/api';
+import { StatusBadge } from '../../components/status-badge';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -53,14 +55,14 @@ export default function UsersPage() {
           <tbody>
             {users.map((user) => (
               <tr key={user.user_id} className="border-t border-gray-700">
-                <td className="p-3">{user.display_name || user.username || '—'}</td>
+                <td className="p-3">
+                  <Link href={`/users/${user.user_id}`} className="hover:underline">
+                    {user.display_name || user.username || '-'}
+                  </Link>
+                </td>
                 <td className="p-3 text-text-secondary">{user.telegram_id}</td>
                 <td className="p-3">
-                  <span className={`px-2 py-0.5 rounded text-xs ${
-                    user.status === 'ACTIVE' ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'
-                  }`}>
-                    {user.status}
-                  </span>
+                  <StatusBadge status={user.status} />
                 </td>
                 <td className="p-3 text-text-secondary">{new Date(user.created_at).toLocaleDateString()}</td>
                 <td className="p-3">

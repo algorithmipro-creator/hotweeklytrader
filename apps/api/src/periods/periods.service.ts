@@ -49,6 +49,29 @@ export class PeriodsService {
     },
   };
 
+  private readonly payoutRegistryInclude = {
+    rows: {
+      include: {
+        deposit: {
+          select: {
+            user_id: true,
+            source_address: true,
+            source_address_display: true,
+            return_address: true,
+            return_address_display: true,
+            user: {
+              select: {
+                user_id: true,
+                username: true,
+                display_name: true,
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+
   async findAll(status?: string) {
     const where = status ? { status: status as InvestmentPeriodStatus } : { status: InvestmentPeriodStatus.ACTIVE };
 
@@ -279,6 +302,69 @@ export class PeriodsService {
     return this.serializeTraderReport(report, true);
   }
 
+  async getTraderReportBuilder(
+    periodId: string,
+    traderId: string,
+  ): Promise<PeriodTraderReportPreviewDto> {
+    await this.ensurePeriodExists(periodId);
+
+    const requiredTrader = await this.getRequiredTrader(periodId, traderId);
+    if (!requiredTrader) {
+      throw new BadRequestException('Trader report builder requires a trader with deposits in the selected period');
+    }
+
+    const existingReport = await (this.prisma as any).periodTraderReport.findUnique({
+      where: {
+        investment_period_id_trader_id: {
+          investment_period_id: periodId,
+          trader_id: traderId,
+        },
+      },
+      include: this.traderReportInclude,
+    });
+
+    const deposits = await this.getTraderDeposits(periodId, traderId);
+    const depositIds = deposits.map((deposit) => deposit.deposit_id);
+    const referralMode = existingReport?.status === ReportStatus.PUBLISHED
+      ? 'MATERIALIZED'
+      : 'PROJECTED';
+    const referralTotals = referralMode === 'MATERIALIZED'
+      ? await this.getReferralRewardTotals(periodId, depositIds)
+      : this.aggregateReferralPreviewTotals(
+        existingReport?.trader_report_id
+          ? await this.referralRewardsService.previewRewardsForPublishedTraderReport(
+            existingReport.trader_report_id,
+            periodId,
+          )
+          : [],
+        depositIds,
+      );
+    const metricsSummary = await this.getTraderMetricsSummary(periodId, traderId);
+    const registrySummary = await this.getTraderRegistrySummary(existingReport?.trader_report_id ?? null);
+
+    const previewInput = existingReport
+      ? {
+        ending_balance_usdt: this.parseOptionalDecimal(existingReport.ending_balance_usdt) ?? 0,
+        trader_fee_percent: this.parseOptionalDecimal(existingReport.trader_fee_percent) ?? 40,
+        network_fees_json: (existingReport.network_fees_json as Record<string, number>) ?? {},
+      }
+      : this.getDefaultTraderReportInput(deposits);
+
+    return this.buildTraderReportPreview(
+      periodId,
+      requiredTrader,
+      deposits,
+      previewInput,
+      {
+        report: existingReport ? this.serializeTraderReport(existingReport, true) : null,
+        referralMode,
+        referralTotals,
+        metricsSummary,
+        registrySummary,
+      },
+    );
+  }
+
   async submitTraderReportForApproval(periodId: string, reportId: string): Promise<PeriodTraderReportDto> {
     await this.ensurePeriodExists(periodId);
 
@@ -402,7 +488,25 @@ export class PeriodsService {
     }
 
     const deposits = await this.getTraderDeposits(periodId, traderId);
-    return this.buildTraderReportPreview(periodId, requiredTrader, deposits, dto);
+    const existingReport = await (this.prisma as any).periodTraderReport.findUnique({
+      where: {
+        investment_period_id_trader_id: {
+          investment_period_id: periodId,
+          trader_id: traderId,
+        },
+      },
+      include: this.traderReportInclude,
+    });
+    const referralTotals = await this.getReferralRewardTotals(periodId, deposits.map((deposit) => deposit.deposit_id));
+    const metricsSummary = await this.getTraderMetricsSummary(periodId, traderId);
+    const registrySummary = await this.getTraderRegistrySummary(existingReport?.trader_report_id ?? null);
+
+    return this.buildTraderReportPreview(periodId, requiredTrader, deposits, dto, {
+      report: existingReport ? this.serializeTraderReport(existingReport, true) : null,
+      referralTotals,
+      metricsSummary,
+      registrySummary,
+    });
   }
 
   async exportTraderReportCsv(periodId: string, reportId: string): Promise<string> {
@@ -475,7 +579,7 @@ export class PeriodsService {
 
     const existingRegistry = await (this.prisma as any).payoutRegistry.findUnique({
       where: { trader_report_id: reportId },
-      include: { rows: true },
+      include: this.payoutRegistryInclude,
     });
 
     if (existingRegistry) {
@@ -489,8 +593,8 @@ export class PeriodsService {
       network_fees_json: (report.network_fees_json as Record<string, number>) ?? {},
     });
 
-    const registry = await (this.prisma as any).payoutRegistry.create({
-      data: {
+      const registry = await (this.prisma as any).payoutRegistry.create({
+        data: {
         investment_period_id: periodId,
         trader_report_id: reportId,
         trader_id: report.trader_id,
@@ -515,9 +619,9 @@ export class PeriodsService {
             status: 'PENDING',
           })),
         },
-      },
-      include: { rows: true },
-    });
+        },
+      include: this.payoutRegistryInclude,
+      });
 
     return this.serializePayoutRegistry(registry);
   }
@@ -527,7 +631,7 @@ export class PeriodsService {
 
     const registry = await (this.prisma as any).payoutRegistry.findUnique({
       where: { trader_report_id: reportId },
-      include: { rows: true },
+      include: this.payoutRegistryInclude,
     });
 
     if (!registry) {
@@ -622,12 +726,34 @@ export class PeriodsService {
       }
     }
 
-    const updated = await (this.prisma as any).payoutRegistryRow.update({
+    await (this.prisma as any).payoutRegistryRow.update({
       where: { payout_registry_row_id: rowId },
       data,
     });
 
-    return this.serializePayoutRegistryRow(updated);
+    const enrichedRow = await (this.prisma as any).payoutRegistryRow.findUnique({
+      where: { payout_registry_row_id: rowId },
+      include: {
+        deposit: {
+          select: {
+            user_id: true,
+            source_address: true,
+            source_address_display: true,
+            return_address: true,
+            return_address_display: true,
+            user: {
+              select: {
+                user_id: true,
+                username: true,
+                display_name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return this.serializePayoutRegistryRow(enrichedRow);
   }
 
   async markRemainingPayoutRegistryRowsAsPaid(
@@ -717,7 +843,9 @@ export class PeriodsService {
         confirmed_amount: true,
         requested_amount: true,
         source_address: true,
+        source_address_display: true,
         return_address: true,
+        return_address_display: true,
         ton_deposit_memo: true,
         return_memo: true,
         settlement_preference: true,
@@ -728,9 +856,173 @@ export class PeriodsService {
         rollover_source_deposit_id: true,
         rollover_attempted_at: true,
         rollover_block_reason: true,
+        user: {
+          select: {
+            user_id: true,
+            username: true,
+            display_name: true,
+          },
+        },
       },
       orderBy: { created_at: 'asc' },
     } as any);
+  }
+
+  private getDefaultTraderReportInput(deposits: any[]): UpsertPeriodTraderReportDto {
+    const startingBalanceUsdt = deposits.reduce((sum, deposit) => (
+      sum + (this.parseOptionalDecimal(deposit.confirmed_amount) ?? this.parseOptionalDecimal(deposit.requested_amount) ?? 0)
+    ), 0);
+
+    return {
+      ending_balance_usdt: this.round2(startingBalanceUsdt),
+      trader_fee_percent: 40,
+      network_fees_json: {
+        TRON: 0,
+        TON: 0,
+        BSC: 0,
+      },
+    };
+  }
+
+  private async getReferralRewardTotals(periodId: string, depositIds: string[]) {
+    const totals = new Map<string, {
+      firstDeposit: number;
+      periodProfit: number;
+      total: number;
+    }>();
+
+    if (depositIds.length === 0) {
+      return totals;
+    }
+
+    const rewards = await (this.prisma as any).referralReward.findMany({
+      where: {
+        investment_period_id: periodId,
+        source_deposit_id: { in: depositIds },
+      },
+      select: {
+        source_deposit_id: true,
+        reward_type: true,
+        reward_amount: true,
+      },
+    });
+
+    for (const reward of rewards) {
+      const key = reward.source_deposit_id;
+      const entry = totals.get(key) ?? { firstDeposit: 0, periodProfit: 0, total: 0 };
+      const amount = this.parseOptionalDecimal(reward.reward_amount) ?? 0;
+
+      if (reward.reward_type === 'FIRST_DEPOSIT') {
+        entry.firstDeposit = this.round2(entry.firstDeposit + amount);
+      } else if (reward.reward_type === 'PERIOD_PROFIT') {
+        entry.periodProfit = this.round2(entry.periodProfit + amount);
+      }
+
+      entry.total = this.round2(entry.firstDeposit + entry.periodProfit);
+      totals.set(key, entry);
+    }
+
+    return totals;
+  }
+
+  private aggregateReferralPreviewTotals(
+    projectedRewards: Array<{ source_deposit_id: string; reward_type: string; reward_amount: number }>,
+    depositIds: string[],
+  ) {
+    const totals = new Map<string, {
+      firstDeposit: number;
+      periodProfit: number;
+      total: number;
+    }>();
+    const allowedDepositIds = new Set(depositIds);
+
+    for (const reward of projectedRewards) {
+      if (!allowedDepositIds.has(reward.source_deposit_id)) {
+        continue;
+      }
+
+      const entry = totals.get(reward.source_deposit_id) ?? { firstDeposit: 0, periodProfit: 0, total: 0 };
+      const amount = this.round2(Number(reward.reward_amount ?? 0));
+
+      if (reward.reward_type === 'FIRST_DEPOSIT') {
+        entry.firstDeposit = this.round2(entry.firstDeposit + amount);
+      } else if (reward.reward_type === 'PERIOD_PROFIT') {
+        entry.periodProfit = this.round2(entry.periodProfit + amount);
+      }
+
+      entry.total = this.round2(entry.firstDeposit + entry.periodProfit);
+      totals.set(reward.source_deposit_id, entry);
+    }
+
+    return totals;
+  }
+
+  private async getTraderMetricsSummary(periodId: string, traderId: string) {
+    const snapshot = await (this.prisma as any).traderPeriodLiveMetrics.findUnique({
+      where: {
+        trader_id_investment_period_id: {
+          trader_id: traderId,
+          investment_period_id: periodId,
+        },
+      },
+    });
+
+    if (!snapshot) {
+      return null;
+    }
+
+    return {
+      source_type: snapshot.source_type ?? null,
+      trade_count: snapshot.trade_count ?? 0,
+      profit_percent: this.parseOptionalDecimal(snapshot.profit_percent) ?? 0,
+      win_rate: this.parseOptionalDecimal(snapshot.win_rate) ?? 0,
+      captured_at: snapshot.captured_at?.toISOString() ?? null,
+    };
+  }
+
+  private async getTraderRegistrySummary(reportId: string | null) {
+    if (!reportId) {
+      return {
+        payout_registry_id: null,
+        exists: false,
+        row_count: 0,
+        terminal_row_count: 0,
+        pending_row_count: 0,
+      };
+    }
+
+    const registry = await (this.prisma as any).payoutRegistry.findUnique({
+      where: { trader_report_id: reportId },
+      include: {
+        rows: {
+          select: {
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!registry) {
+      return {
+        payout_registry_id: null,
+        exists: false,
+        row_count: 0,
+        terminal_row_count: 0,
+        pending_row_count: 0,
+      };
+    }
+
+    const terminalStatuses = new Set(['PAID_MANUAL', 'PAID_BATCH', 'FAILED', 'SKIPPED']);
+    const rowCount = (registry.rows ?? []).length;
+    const terminalRowCount = (registry.rows ?? []).filter((row: any) => terminalStatuses.has(row.status)).length;
+
+    return {
+      payout_registry_id: registry.payout_registry_id,
+      exists: true,
+      row_count: rowCount,
+      terminal_row_count: terminalRowCount,
+      pending_row_count: rowCount - terminalRowCount,
+    };
   }
 
   private async materializeSettlementOutcomesForPublishedTraderReport(report: any): Promise<void> {
@@ -942,6 +1234,10 @@ export class PeriodsService {
   }
 
   private serializePayoutRegistryRow(row: any) {
+    const depositUser = row.deposit?.user ?? null;
+    const defaultPayoutAddress = this.resolveRegistryRowAddress(row, 'default_payout_address');
+    const selectedPayoutAddress = this.resolveRegistryRowAddress(row, 'selected_payout_address');
+
     return {
       payout_registry_row_id: row.payout_registry_row_id,
       payout_registry_id: row.payout_registry_id,
@@ -950,6 +1246,8 @@ export class PeriodsService {
       deposit_id: row.deposit_id,
       trader_id: row.trader_id,
       trader_nickname: row.trader_nickname,
+      user_id: row.deposit?.user_id ?? null,
+      user_label: this.buildUserLabel(depositUser),
       network: row.network,
       asset_symbol: row.asset_symbol,
       deposit_amount_usdt: parseFloat(row.deposit_amount_usdt.toString()),
@@ -957,8 +1255,8 @@ export class PeriodsService {
       payout_gross_usdt: parseFloat(row.payout_gross_usdt.toString()),
       payout_fee_usdt: parseFloat(row.payout_fee_usdt.toString()),
       payout_net_usdt: parseFloat(row.payout_net_usdt.toString()),
-      default_payout_address: row.default_payout_address ?? null,
-      selected_payout_address: row.selected_payout_address ?? null,
+      default_payout_address: defaultPayoutAddress,
+      selected_payout_address: selectedPayoutAddress,
       address_source: row.address_source,
       status: row.status,
       tx_hash: row.tx_hash ?? null,
@@ -975,6 +1273,25 @@ export class PeriodsService {
     trader: any,
     deposits: any[],
     dto: UpsertPeriodTraderReportDto,
+    options?: {
+      report?: PeriodTraderReportDto | null;
+      referralMode?: 'PROJECTED' | 'MATERIALIZED';
+      referralTotals?: Map<string, { firstDeposit: number; periodProfit: number; total: number }>;
+      metricsSummary?: {
+        source_type: string | null;
+        trade_count: number;
+        profit_percent: number;
+        win_rate: number;
+        captured_at: string | null;
+      } | null;
+      registrySummary?: {
+        payout_registry_id: string | null;
+        exists: boolean;
+        row_count: number;
+        terminal_row_count: number;
+        pending_row_count: number;
+      };
+    },
   ): PeriodTraderReportPreviewDto {
     const normalizedDeposits = deposits.map((deposit) => {
       const depositAmountUsdt = parseFloat((deposit.confirmed_amount ?? deposit.requested_amount ?? 0).toString());
@@ -1008,18 +1325,26 @@ export class PeriodsService {
       const payoutFeeUsdt = networkTotal > 0
         ? Number(networkFees[deposit.network] ?? 0) * (deposit.deposit_amount_usdt / networkTotal)
         : 0;
-      const selectedPayoutAddress = deposit.return_address || deposit.source_address || null;
+      const selectedPayoutAddress = this.resolveDepositDisplayPayoutAddress(deposit);
       const addressSource = deposit.return_address
         ? 'RETURN_ADDRESS'
         : deposit.source_address
           ? 'SOURCE_ADDRESS'
           : 'MANUAL_OVERRIDE';
+      const referralTotals = options?.referralTotals?.get(deposit.deposit_id) ?? {
+        firstDeposit: 0,
+        periodProfit: 0,
+        total: 0,
+      };
 
       return {
         deposit_id: deposit.deposit_id,
+        user_id: deposit.user_id,
+        user_label: this.buildUserLabel(deposit.user),
         network: deposit.network,
         asset_symbol: deposit.asset_symbol,
         deposit_amount_usdt: this.round2(deposit.deposit_amount_usdt),
+        confirmed_amount_usdt: this.round2(deposit.deposit_amount_usdt),
         share_ratio: this.round6(shareRatio),
         payout_gross_usdt: this.round2(payoutGrossUsdt),
         payout_fee_usdt: this.round2(payoutFeeUsdt),
@@ -1027,8 +1352,18 @@ export class PeriodsService {
         default_payout_address: selectedPayoutAddress,
         selected_payout_address: selectedPayoutAddress,
         address_source: addressSource,
+        referral_first_deposit_usdt: this.round2(referralTotals.firstDeposit),
+        referral_period_profit_usdt: this.round2(referralTotals.periodProfit),
+        referral_reward_total_usdt: this.round2(referralTotals.total),
       };
     });
+
+    const metricsSummary = options?.metricsSummary
+      ? {
+        ...options.metricsSummary,
+        pnl: this.round2(grossPnlUsdt),
+      }
+      : null;
 
     return {
       investment_period_id: periodId,
@@ -1036,13 +1371,50 @@ export class PeriodsService {
       trader_nickname: trader.nickname,
       trader_slug: trader.slug,
       trader_display_name: trader.display_name,
+      referral_mode: options?.referralMode ?? 'MATERIALIZED',
+      report: options?.report ?? null,
+      deposit_count: normalizedDeposits.length,
+      starting_balance_usdt: this.round2(totalDepositsUsdt),
+      ending_balance_usdt: this.round2(endingBalanceUsdt),
+      realized_profit_usdt: this.round2(grossPnlUsdt),
+      period_balance_before_fees_usdt: this.round2(totalDepositsUsdt + grossPnlUsdt),
+      trader_fee_percent: this.round2(traderFeePercent),
       total_deposits_usdt: this.round2(totalDepositsUsdt),
       gross_pnl_usdt: this.round2(grossPnlUsdt),
       trader_fee_usdt: this.round2(traderFeeUsdt),
+      network_fees_json: {
+        TRON: this.round2(Number(networkFees.TRON ?? 0)),
+        TON: this.round2(Number(networkFees.TON ?? 0)),
+        BSC: this.round2(Number(networkFees.BSC ?? 0)),
+      },
       total_network_fees_usdt: this.round2(totalNetworkFeesUsdt),
       net_distributable_usdt: this.round2(netDistributableUsdt),
+      metrics_summary: metricsSummary,
+      registry_summary: options?.registrySummary ?? {
+        payout_registry_id: null,
+        exists: false,
+        row_count: 0,
+        terminal_row_count: 0,
+        pending_row_count: 0,
+      },
       rows,
     };
+  }
+
+  private buildUserLabel(user: { user_id?: string; username?: string | null; display_name?: string | null } | null | undefined) {
+    if (!user) {
+      return 'Unknown user';
+    }
+
+    if (user.display_name) {
+      return user.display_name;
+    }
+
+    if (user.username) {
+      return `@${user.username}`;
+    }
+
+    return user.user_id ?? 'Unknown user';
   }
 
   private async materializeDepositReportsFromTraderReport(report: any): Promise<void> {
@@ -1098,6 +1470,37 @@ export class PeriodsService {
 
   private round6(value: number): number {
     return Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000;
+  }
+
+  private resolveDepositDisplayPayoutAddress(deposit: any): string | null {
+    if (deposit.return_address) {
+      return deposit.return_address_display ?? deposit.return_address ?? null;
+    }
+
+    if (deposit.source_address) {
+      return deposit.source_address_display ?? deposit.source_address ?? null;
+    }
+
+    return null;
+  }
+
+  private resolveRegistryRowAddress(
+    row: any,
+    field: 'default_payout_address' | 'selected_payout_address',
+  ): string | null {
+    if (row.address_source === 'MANUAL_OVERRIDE') {
+      return row[field] ?? null;
+    }
+
+    if (row.address_source === 'RETURN_ADDRESS') {
+      return row.deposit?.return_address_display ?? row.deposit?.return_address ?? row[field] ?? null;
+    }
+
+    if (row.address_source === 'SOURCE_ADDRESS') {
+      return row.deposit?.source_address_display ?? row.deposit?.source_address ?? row[field] ?? null;
+    }
+
+    return row[field] ?? null;
   }
 
   private parseOptionalDecimal(value: unknown): number | null {

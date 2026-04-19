@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --tg-theme-bg-color: #0f172a;
-  --tg-theme-secondary-bg-color: #1e293b;
+  --tg-theme-bg-color: #394247;
+  --tg-theme-secondary-bg-color: #31383c;
   --tg-theme-text-color: #f8fafc;
   --tg-theme-hint-color: #94a3b8;
   --tg-theme-link-color: #60a5fa;
@@ -15,6 +15,7 @@
 body {
   background-color: var(--tg-theme-bg-color);
   color: var(--tg-theme-text-color);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
+  background-image: radial-gradient(circle at 18% 0%, rgba(52, 181, 220, 0.16), transparent 22%), radial-gradient(circle at 84% 10%, rgba(247, 166, 0, 0.12), transparent 18%), linear-gradient(180deg, #31383c 0%, #394247 46%, #2b3135 100%);
 }

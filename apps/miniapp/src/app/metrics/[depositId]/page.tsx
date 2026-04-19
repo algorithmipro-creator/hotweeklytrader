@@ -6,12 +6,30 @@ import { useParams } from 'next/navigation';
 import { AppScreen } from '../../../components/app-screen';
 import { BrandBellLink } from '../../../components/brand-bell-link';
 import { LanguageSwitch } from '../../../components/language-switch';
-import { ArrowLeftIcon } from '../../../components/icons';
+import { PageBackButton } from '../../../components/page-back-button';
 import { StatusBadge } from '../../../components/status-badge';
 import { useLanguage } from '../../../providers/language-provider';
 import { getDeposit, getDepositLiveMetrics, getPeriods, getTraders } from '../../../lib/api';
-import { buildDepositMetricsSummary } from '../../../lib/home-deposit-summary';
-import { getTraderCatalog, mergeApiTraderCatalog } from '../../../lib/trader-catalog';
+
+function getTraderCatalog() {
+  return [];
+}
+
+function mergeApiTraderCatalog(apiTraders: any[]) {
+  return Array.isArray(apiTraders) ? apiTraders : [];
+}
+
+function buildDepositMetricsSummary(
+  deposit: { deposit_id: string; trader_id?: string | null; investment_period_id?: string | null },
+  period: { investment_period_id?: string | null; period_name?: string | null; name?: string | null; label?: string | null } | null,
+  trader: { trader_id?: string | null; trader_name?: string | null; display_name?: string | null; nickname?: string | null; name?: string | null } | null,
+) {
+  return {
+    depositId: deposit.deposit_id,
+    traderName: trader?.display_name || trader?.trader_name || trader?.nickname || trader?.name || 'Unknown trader',
+    periodLabel: period?.label || period?.period_name || period?.name || period?.investment_period_id || 'Unknown period',
+  };
+}
 
 export default function DepositMetricsPage() {
   const { t, language } = useLanguage();
@@ -55,17 +73,19 @@ export default function DepositMetricsPage() {
 
   const period = periods.find((item) => item.investment_period_id === deposit.investment_period_id) || null;
   const trader = traders.find((item) => item.trader_id === deposit.trader_id) || null;
-  const summary = buildDepositMetricsSummary(deposit, period, trader, language);
+  const summary = buildDepositMetricsSummary(deposit, period, trader);
 
   return (
     <AppScreen>
       <div className="relative z-10 rounded-3xl border border-cyan-300/15 bg-slate-950/60 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
         <div className="flex items-center justify-between gap-3">
-          <Link href={`/deposits/${deposit.deposit_id}`} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-300/15 bg-slate-900/70 text-slate-100">
-            <ArrowLeftIcon className="h-5 w-5" />
-          </Link>
-          <BrandBellLink />
-          <LanguageSwitch />
+          <div className="flex items-center gap-3">
+            <PageBackButton fallbackHref={`/deposits/${deposit.deposit_id}`} />
+          </div>
+          <div className="flex items-center gap-2">
+            <BrandBellLink />
+            <LanguageSwitch />
+          </div>
         </div>
 
         <div className="mt-5 rounded-3xl border border-cyan-300/10 bg-[linear-gradient(135deg,rgba(14,29,36,0.96),rgba(8,18,24,0.92))] p-5">

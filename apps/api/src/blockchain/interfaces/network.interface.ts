@@ -15,6 +15,7 @@ export interface OnChainTransaction {
   fromAddress: string;
   toAddress: string;
   amount: string;
+  memo?: string;
   tokenSymbol: string;
   confirmations: number;
   timestamp: Date;

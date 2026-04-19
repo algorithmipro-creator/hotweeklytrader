@@ -4,46 +4,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getAdminPeriods, createPeriod, updatePeriodStatus } from '../../lib/api';
 
-const NEXT_STATUS_BY_CURRENT: Record<string, string | null> = {
-  FUNDING: 'TRADING_ACTIVE',
-  TRADING_ACTIVE: 'REPORTING',
-  REPORTING: 'PAYOUT_IN_PROGRESS',
-  PAYOUT_IN_PROGRESS: 'CLOSED',
-  CLOSED: null,
-};
-
-const ACTION_LABEL_BY_STATUS: Record<string, string | null> = {
-  FUNDING: 'Start Trading',
-  TRADING_ACTIVE: 'Open Reporting',
-  REPORTING: 'Open Payouts',
-  PAYOUT_IN_PROGRESS: 'Close Period',
-  CLOSED: null,
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  FUNDING: 'Funding',
-  TRADING_ACTIVE: 'Trading active',
-  REPORTING: 'Reporting',
-  PAYOUT_IN_PROGRESS: 'Payout in progress',
-  CLOSED: 'Closed',
-};
-
-const STATUS_BADGES: Record<string, string> = {
-  FUNDING: 'bg-success/20 text-success',
-  TRADING_ACTIVE: 'bg-primary/20 text-primary',
-  REPORTING: 'bg-warning/20 text-warning',
-  PAYOUT_IN_PROGRESS: 'bg-link/20 text-link',
-  CLOSED: 'bg-gray-500/20 text-gray-400',
-};
-
 export default function PeriodsPage() {
   const [periods, setPeriods] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [actionError, setActionError] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     period_type: 'fixed',
+    status: 'ACTIVE',
     start_date: '',
     end_date: '',
     accepted_networks: 'BSC,TRON,TON',
@@ -72,14 +40,12 @@ export default function PeriodsPage() {
     }
   };
 
-  const handleAdvance = async (id: string, nextStatus: string) => {
+  const handleStatusChange = async (id: string, status: string) => {
     try {
-      await updatePeriodStatus(id, nextStatus);
-      const refreshed = await getAdminPeriods();
-      setPeriods(refreshed);
-      setActionError('');
+      await updatePeriodStatus(id, status);
+      setPeriods((prev) => prev.map((p) => (p.investment_period_id === id ? { ...p, status } : p)));
     } catch (err) {
-      setActionError((err as any)?.response?.data?.message || 'Failed to update period status');
+      console.error('Failed to update period status:', err);
     }
   };
 
@@ -97,12 +63,6 @@ export default function PeriodsPage() {
         </button>
       </div>
 
-      {actionError && (
-        <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
-          {actionError}
-        </div>
-      )}
-
       {showForm && (
         <form onSubmit={handleCreate} className="bg-bg-secondary rounded-lg p-4 mb-6 space-y-3">
           <input
@@ -114,6 +74,14 @@ export default function PeriodsPage() {
             required
           />
           <div className="grid grid-cols-2 gap-3">
+            <select
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              className="px-3 py-2 bg-bg-tertiary rounded-lg text-sm text-text"
+            >
+              <option value="ACTIVE">Active</option>
+              <option value="DRAFT">Draft</option>
+            </select>
             <input
               type="date"
               value={formData.start_date}
@@ -157,58 +125,52 @@ export default function PeriodsPage() {
               <th className="text-left p-3">Period</th>
               <th className="text-left p-3">Networks</th>
               <th className="text-left p-3">Assets</th>
-              <th className="text-left p-3">Deposits</th>
-              <th className="text-left p-3">Total USDT</th>
-              <th className="text-left p-3">Average USDT</th>
               <th className="text-left p-3">Status</th>
-              <th className="text-left p-3">Action</th>
+              <th className="text-left p-3">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {periods.map((p) => {
-              const nextStatus = NEXT_STATUS_BY_CURRENT[p.status] || null;
-              const nextActionLabel = ACTION_LABEL_BY_STATUS[p.status] || null;
-              const currentLabel = STATUS_LABELS[p.status] || p.status;
-
-              return (
-                <tr key={p.investment_period_id} className="border-t border-gray-700">
-                  <td className="p-3 font-medium">{p.title}</td>
-                  <td className="p-3 text-text-secondary">
-                    {new Date(p.start_date).toLocaleDateString()} - {new Date(p.end_date).toLocaleDateString()}
-                  </td>
-                  <td className="p-3 text-text-secondary">{p.accepted_networks.join(', ')}</td>
-                  <td className="p-3 text-text-secondary">{p.accepted_assets.join(', ')}</td>
-                  <td className="p-3 text-text-secondary">{p.depositCount ?? 0}</td>
-                  <td className="p-3 text-text-secondary">{(p.totalDepositedUsdt ?? 0).toFixed?.(2) ?? p.totalDepositedUsdt ?? 0}</td>
-                  <td className="p-3 text-text-secondary">{(p.averageDepositUsdt ?? 0).toFixed?.(2) ?? p.averageDepositUsdt ?? 0}</td>
-                  <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded text-xs ${STATUS_BADGES[p.status] || 'bg-gray-500/20 text-gray-400'}`}>
-                      {currentLabel}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-2">
-                      {nextStatus && nextActionLabel ? (
-                        <button
-                          onClick={() => handleAdvance(p.investment_period_id, nextStatus)}
-                          className="px-3 py-1 rounded bg-bg-tertiary text-text text-xs border border-gray-600 hover:border-primary"
-                        >
-                          {nextActionLabel}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-text-secondary">No action</span>
-                      )}
-                      <Link
-                        href={`/periods/${p.investment_period_id}`}
-                        className="text-primary text-xs hover:underline"
-                      >
-                        Open
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+            {periods.map((p) => (
+              <tr key={p.investment_period_id} className="border-t border-gray-700">
+                <td className="p-3 font-medium">{p.title}</td>
+                <td className="p-3 text-text-secondary">
+                  {new Date(p.start_date).toLocaleDateString()} — {new Date(p.end_date).toLocaleDateString()}
+                </td>
+                <td className="p-3 text-text-secondary">{p.accepted_networks.join(', ')}</td>
+                <td className="p-3 text-text-secondary">{p.accepted_assets.join(', ')}</td>
+                <td className="p-3">
+                  <span className={`px-2 py-0.5 rounded text-xs ${
+                    p.status === 'ACTIVE' ? 'bg-success/20 text-success' :
+                    p.status === 'DRAFT' ? 'bg-gray-500/20 text-gray-400' :
+                    p.status === 'COMPLETED' ? 'bg-link/20 text-link' :
+                    'bg-warning/20 text-warning'
+                  }`}>
+                    {p.status}
+                  </span>
+                </td>
+                <td className="p-3">
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={p.status}
+                      onChange={(e) => handleStatusChange(p.investment_period_id, e.target.value)}
+                      className="bg-bg-tertiary text-text text-xs px-2 py-1 rounded"
+                    >
+                      <option value="DRAFT">Draft</option>
+                      <option value="ACTIVE">Active</option>
+                      <option value="LOCKED">Locked</option>
+                      <option value="COMPLETED">Completed</option>
+                      <option value="ARCHIVED">Archived</option>
+                    </select>
+                    <Link
+                      href={`/trader-reporting?periodId=${p.investment_period_id}`}
+                      className="text-primary text-xs hover:underline"
+                    >
+                      Reporting
+                    </Link>
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
 

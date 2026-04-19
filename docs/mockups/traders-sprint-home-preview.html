@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Traders Sprint Platform Preview</title>
+    <style>
+      :root {
+        --bg-0: #061218;
+        --bg-1: #0b1b24;
+        --bg-2: #10242f;
+        --panel: rgba(10, 24, 31, 0.82);
+        --panel-strong: rgba(13, 31, 40, 0.96);
+        --line: rgba(103, 240, 228, 0.26);
+        --glow: rgba(34, 217, 217, 0.32);
+        --accent-0: #14cad3;
+        --accent-1: #6cf2db;
+        --accent-2: #a78bfa;
+        --text: #e8ffff;
+        --muted: #93b7bc;
+        --muted-strong: #b8d2d6;
+        --danger: #ff7f9f;
+        --shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        overflow-x: hidden;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 50% 18%, rgba(27, 210, 214, 0.28), transparent 24%),
+          radial-gradient(circle at 15% 25%, rgba(100, 242, 219, 0.14), transparent 22%),
+          radial-gradient(circle at 82% 18%, rgba(167, 139, 250, 0.12), transparent 16%),
+          linear-gradient(180deg, #051017 0%, #07171f 45%, #081219 100%);
+      }
+
+      body::before,
+      body::after {
+        content: "";
+        position: fixed;
+        inset: auto;
+        width: 380px;
+        height: 380px;
+        border-radius: 999px;
+        filter: blur(48px);
+        opacity: 0.28;
+        pointer-events: none;
+      }
+
+      body::before {
+        top: -120px;
+        left: -60px;
+        background: #0ed1d7;
+      }
+
+      body::after {
+        right: -90px;
+        bottom: -80px;
+        background: #6cf2db;
+      }
+
+      .frame {
+        width: min(420px, calc(100vw - 28px));
+        min-height: 860px;
+        position: relative;
+        border-radius: 42px;
+        padding: 18px;
+        background:
+          linear-gradient(180deg, rgba(105, 244, 226, 0.18), rgba(255, 255, 255, 0.03)),
+          rgba(4, 13, 18, 0.78);
+        box-shadow:
+          inset 0 0 0 1px rgba(140, 255, 238, 0.18),
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          0 0 0 1px rgba(14, 199, 207, 0.1),
+          0 40px 90px rgba(0, 0, 0, 0.55);
+      }
+
+      .frame::before {
+        content: "";
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        width: 144px;
+        height: 28px;
+        transform: translateX(-50%);
+        border-radius: 0 0 18px 18px;
+        background: rgba(5, 16, 22, 0.92);
+        box-shadow: inset 0 -1px 0 rgba(105, 244, 226, 0.08);
+      }
+
+      .screen {
+        position: relative;
+        min-height: 824px;
+        border-radius: 30px;
+        padding: 18px 18px 110px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 50% 0%, rgba(20, 202, 211, 0.18), transparent 24%),
+          linear-gradient(180deg, rgba(16, 33, 42, 0.96), rgba(8, 18, 24, 0.98));
+        box-shadow:
+          inset 0 0 0 1px rgba(108, 242, 219, 0.16),
+          inset 0 0 40px rgba(26, 208, 210, 0.08);
+      }
+
+      .screen::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(132, 255, 238, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(132, 255, 238, 0.04) 1px, transparent 1px);
+        background-size: 24px 24px;
+        opacity: 0.3;
+        pointer-events: none;
+      }
+
+      .topbar,
+      .hero,
+      .stat-card,
+      .button-stack,
+      .dock {
+        position: relative;
+        z-index: 1;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .brand-chip,
+      .lang-chip,
+      .icon-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        border: 1px solid rgba(108, 242, 219, 0.22);
+        background: rgba(9, 24, 32, 0.74);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03), 0 0 18px rgba(14, 199, 207, 0.1);
+        backdrop-filter: blur(10px);
+      }
+
+      .brand-chip {
+        padding: 10px 14px;
+        gap: 10px;
+        color: var(--muted-strong);
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .brand-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent-1), var(--accent-0));
+        box-shadow: 0 0 18px rgba(108, 242, 219, 0.75);
+      }
+
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .lang-chip,
+      .icon-chip {
+        width: 42px;
+        height: 42px;
+        color: var(--text);
+        font-size: 18px;
+      }
+
+      .hero {
+        margin-top: 18px;
+        padding: 18px 16px 16px;
+        border-radius: 28px;
+        background:
+          radial-gradient(circle at 50% 0%, rgba(20, 202, 211, 0.18), transparent 36%),
+          linear-gradient(180deg, rgba(18, 38, 48, 0.9), rgba(10, 22, 29, 0.92));
+        border: 1px solid rgba(108, 242, 219, 0.18);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.04),
+          0 18px 46px rgba(0, 0, 0, 0.3),
+          0 0 26px rgba(20, 202, 211, 0.08);
+      }
+
+      .hero-copy {
+        text-align: center;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--accent-1);
+        font-size: 11px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 32px;
+        line-height: 1.02;
+        letter-spacing: -0.04em;
+      }
+
+      .hero-copy p {
+        margin: 10px auto 0;
+        max-width: 290px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .robot-shell {
+        width: 230px;
+        margin: 18px auto 8px;
+        position: relative;
+        filter: drop-shadow(0 24px 38px rgba(0, 0, 0, 0.36));
+      }
+
+      .robot-antennas {
+        display: flex;
+        justify-content: center;
+        gap: 60px;
+        margin-bottom: -8px;
+      }
+
+      .robot-antennas span {
+        width: 14px;
+        height: 50px;
+        border-radius: 12px 12px 2px 2px;
+        background: linear-gradient(180deg, #9eb1b8, #38434a 55%, #182027);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+      }
+
+      .robot-head {
+        padding: 10px;
+        border-radius: 22px;
+        background: linear-gradient(180deg, #48545b, #171f25 34%, #0f171d);
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+          inset 0 -3px 10px rgba(0, 0, 0, 0.45),
+          0 0 24px rgba(20, 202, 211, 0.2);
+      }
+
+      .robot-screen {
+        height: 170px;
+        position: relative;
+        overflow: hidden;
+        border-radius: 16px;
+        border: 1px solid rgba(111, 215, 221, 0.18);
+        background:
+          linear-gradient(rgba(121, 180, 186, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(121, 180, 186, 0.08) 1px, transparent 1px),
+          linear-gradient(180deg, rgba(18, 40, 47, 0.9), rgba(10, 19, 24, 0.98));
+        background-size: 22px 22px, 22px 22px, auto;
+      }
+
+      .smile {
+        position: absolute;
+        left: 50%;
+        top: 54px;
+        width: 124px;
+        height: 72px;
+        transform: translateX(-50%);
+        border-bottom: 10px solid var(--accent-0);
+        border-radius: 0 0 90px 90px;
+        box-shadow: 0 0 18px rgba(20, 202, 211, 0.55);
+      }
+
+      .eye {
+        position: absolute;
+        top: 44px;
+        width: 18px;
+        height: 44px;
+        border-radius: 10px;
+        box-shadow: 0 0 18px currentColor;
+      }
+
+      .eye.left {
+        left: 72px;
+        color: var(--accent-0);
+        background: linear-gradient(180deg, #7cf7f2, #22d4dc);
+      }
+
+      .eye.right {
+        right: 72px;
+        color: #ff7ca8;
+        background: linear-gradient(180deg, #ffb2cb, #ff7ca8);
+      }
+
+      .hero-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .metric {
+        padding: 12px 10px;
+        border-radius: 18px;
+        background: rgba(8, 20, 26, 0.72);
+        border: 1px solid rgba(108, 242, 219, 0.12);
+        text-align: center;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 16px;
+      }
+
+      .metric span {
+        display: block;
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .button-stack {
+        margin-top: 18px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .button-card {
+        border: 0;
+        width: 100%;
+        padding: 16px 18px;
+        border-radius: 22px;
+        text-align: left;
+        cursor: pointer;
+        color: var(--text);
+        background: var(--panel);
+        border: 1px solid rgba(108, 242, 219, 0.18);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.04),
+          0 14px 30px rgba(0, 0, 0, 0.22);
+      }
+
+      .button-card.primary {
+        background:
+          linear-gradient(135deg, rgba(20, 202, 211, 0.18), rgba(108, 242, 219, 0.08)),
+          rgba(9, 25, 31, 0.94);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.08),
+          0 0 0 1px rgba(20, 202, 211, 0.08),
+          0 14px 32px rgba(0, 0, 0, 0.28),
+          0 0 24px rgba(20, 202, 211, 0.12);
+      }
+
+      .button-card.accent {
+        background: linear-gradient(135deg, rgba(20, 202, 211, 0.88), rgba(108, 242, 219, 0.9));
+        color: #032228;
+        border-color: rgba(255, 255, 255, 0.08);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.42),
+          0 18px 34px rgba(6, 181, 190, 0.28),
+          0 0 28px rgba(108, 242, 219, 0.18);
+      }
+
+      .button-card-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .button-card-subtitle {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .button-card.accent .button-card-subtitle {
+        color: rgba(1, 38, 42, 0.76);
+      }
+
+      .arrow {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .button-card.accent .arrow {
+        background: rgba(2, 49, 53, 0.12);
+      }
+
+      .stat-card {
+        margin-top: 18px;
+        padding: 16px;
+        border-radius: 24px;
+        background: rgba(10, 24, 30, 0.82);
+        border: 1px solid rgba(108, 242, 219, 0.14);
+        box-shadow: var(--shadow);
+      }
+
+      .stat-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: baseline;
+      }
+
+      .stat-head h2 {
+        margin: 0;
+        font-size: 16px;
+        letter-spacing: -0.02em;
+      }
+
+      .pill {
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        color: var(--accent-1);
+        border: 1px solid rgba(108, 242, 219, 0.18);
+        background: rgba(8, 20, 26, 0.72);
+      }
+
+      .stat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .stat-item {
+        padding: 12px;
+        border-radius: 18px;
+        background: rgba(7, 17, 23, 0.88);
+        border: 1px solid rgba(108, 242, 219, 0.08);
+      }
+
+      .stat-item small {
+        color: var(--muted);
+        display: block;
+        margin-bottom: 6px;
+        font-size: 11px;
+      }
+
+      .stat-item strong {
+        font-size: 18px;
+      }
+
+      .dock {
+        position: absolute;
+        left: 18px;
+        right: 18px;
+        bottom: 18px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+        padding: 10px;
+        border-radius: 24px;
+        background: rgba(9, 22, 29, 0.92);
+        border: 1px solid rgba(108, 242, 219, 0.16);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.05),
+          0 18px 42px rgba(0, 0, 0, 0.34);
+        backdrop-filter: blur(14px);
+      }
+
+      .dock-item {
+        border: 0;
+        padding: 10px 0 8px;
+        border-radius: 18px;
+        background: transparent;
+        color: var(--muted);
+        display: grid;
+        justify-items: center;
+        gap: 6px;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+      }
+
+      .dock-item span {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .dock-item.active {
+        color: var(--text);
+        background: linear-gradient(180deg, rgba(20, 202, 211, 0.16), rgba(8, 20, 26, 0.08));
+        box-shadow: inset 0 0 0 1px rgba(108, 242, 219, 0.14);
+      }
+
+      .dock-item.active span {
+        background: linear-gradient(135deg, rgba(20, 202, 211, 0.78), rgba(108, 242, 219, 0.88));
+        color: #032228;
+        box-shadow: 0 0 18px rgba(108, 242, 219, 0.22);
+      }
+
+      @media (max-width: 480px) {
+        .frame {
+          min-height: 100vh;
+          width: 100vw;
+          border-radius: 0;
+          padding: 0;
+        }
+
+        .frame::before {
+          top: 0;
+        }
+
+        .screen {
+          min-height: 100vh;
+          border-radius: 0;
+          padding-top: 26px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="frame">
+      <section class="screen">
+        <div class="topbar">
+          <div class="brand-chip">
+            <span class="brand-dot"></span>
+            deplexapp
+          </div>
+          <div class="top-actions">
+            <button class="lang-chip" aria-label="Language">EN</button>
+            <button class="icon-chip" aria-label="Profile">◌</button>
+          </div>
+        </div>
+
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">Deplexapp Trading Interface</p>
+            <h1>Choose an AI trader and start sprint</h1>
+          </div>
+
+          <div class="robot-shell" aria-hidden="true">
+            <div class="robot-antennas">
+              <span></span>
+              <span></span>
+            </div>
+            <div class="robot-head">
+              <div class="robot-screen">
+                <div class="eye left"></div>
+                <div class="eye right"></div>
+                <div class="smile"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-metrics">
+            <div class="metric">
+              <strong>7D</strong>
+              <span>Sprint cycle</span>
+            </div>
+            <div class="metric">
+              <strong>3</strong>
+              <span>Networks</span>
+            </div>
+            <div class="metric">
+              <strong>24/7</strong>
+              <span>Report flow</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="button-stack">
+          <button class="button-card primary">
+            <span class="button-card-title">
+              Traders
+              <span class="arrow">›</span>
+            </span>
+            <span class="button-card-subtitle">choose your lexer</span>
+          </button>
+
+          <button class="button-card accent">
+            <span class="button-card-title">
+              New dep
+              <span class="arrow">+</span>
+            </span>
+            <span class="button-card-subtitle">Create a sprint deposit</span>
+          </button>
+
+          <button class="button-card">
+            <span class="button-card-title">
+              My dep
+              <span class="arrow">›</span>
+            </span>
+            <span class="button-card-subtitle">Track active and completed deposits</span>
+          </button>
+        </section>
+
+        <section class="stat-card">
+          <div class="stat-head">
+            <h2>Live Sprint Snapshot</h2>
+            <span class="pill">Current week</span>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-item">
+              <small>Featured Mode</small>
+              <strong>Trader Routing</strong>
+            </div>
+            <div class="stat-item">
+              <small>Networks Open</small>
+              <strong>TON / TRON</strong>
+            </div>
+            <div class="stat-item">
+              <small>Next Report</small>
+              <strong>02d 14h</strong>
+            </div>
+            <div class="stat-item">
+              <small>Support State</small>
+              <strong>Online</strong>
+            </div>
+          </div>
+        </section>
+
+        <nav class="dock" aria-label="Bottom navigation">
+          <button class="dock-item">
+            <span>?</span>
+            FAQ
+          </button>
+          <button class="dock-item active">
+            <span>⌂</span>
+            Home
+          </button>
+          <button class="dock-item">
+            <span>◈</span>
+            Traders
+          </button>
+          <button class="dock-item">
+            <span>⌕</span>
+            Support
+          </button>
+          <button class="dock-item">
+            <span>◔</span>
+            Alerts
+          </button>
+        </nav>
+      </section>
+    </main>
+  </body>
+</html>

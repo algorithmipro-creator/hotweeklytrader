@@ -1,12 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getWallets, bindWallet, unbindWallet } from '../../lib/api';
+import { useEffect, useState } from 'react';
+import { AppScreen } from '../../components/app-screen';
+import { BrandBellLink } from '../../components/brand-bell-link';
+import { LanguageSwitch } from '../../components/language-switch';
+import { PageBackButton } from '../../components/page-back-button';
+import { bindWallet, getWallets, unbindWallet } from '../../lib/api';
+import { useLanguage } from '../../providers/language-provider';
 
 const NETWORKS = ['BSC', 'TRON', 'TON'];
 
 export default function AddressesPage() {
+  const { t } = useLanguage();
   const [wallets, setWallets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -16,28 +22,24 @@ export default function AddressesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadWallets();
-  }, []);
-
-  const loadWallets = () => {
     getWallets()
       .then(setWallets)
       .catch(console.error)
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  const handleBind = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleBind = async (event: React.FormEvent) => {
+    event.preventDefault();
     setSubmitting(true);
     setError(null);
 
     try {
       const wallet = await bindWallet({ network, source_address: address });
       setWallets((prev) => [wallet, ...prev]);
-      setShowForm(false);
       setAddress('');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to bind address');
+      setShowForm(false);
+    } catch (nextError: any) {
+      setError(nextError.response?.data?.message || t('addresses.failedBind'));
     } finally {
       setSubmitting(false);
     }
@@ -46,94 +48,110 @@ export default function AddressesPage() {
   const handleUnbind = async (walletId: string) => {
     try {
       await unbindWallet(walletId);
-      setWallets((prev) => prev.filter((w) => w.wallet_id !== walletId));
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to unbind');
+      setWallets((prev) => prev.filter((wallet) => wallet.wallet_id !== walletId));
+    } catch (nextError: any) {
+      alert(nextError.response?.data?.message || t('addresses.failedUnbind'));
     }
   };
 
-  if (loading) return <div className="p-4 text-text-secondary">Loading...</div>;
+  if (loading) {
+    return <div className="p-4 text-text-secondary">{t('common.loading')}</div>;
+  }
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold">My Addresses</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="text-primary text-sm font-medium"
-        >
-          {showForm ? 'Cancel' : '+ Add Address'}
-        </button>
+    <AppScreen>
+      <div className="relative z-10 rounded-3xl border border-cyan-300/15 bg-slate-950/60 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <PageBackButton fallbackHref="/" />
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.2em] text-cyan-200/70">{t('addresses.kicker')}</div>
+              <h1 className="mt-2 text-2xl font-bold text-slate-50">{t('addresses.title')}</h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <BrandBellLink />
+            <LanguageSwitch />
+          </div>
+        </div>
+        <p className="mt-3 text-sm text-slate-400">{t('addresses.subtitle')}</p>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleBind} className="bg-bg-secondary rounded-lg p-4 mb-4 space-y-3">
-          {error && (
-            <div className="bg-red-500/20 text-red-400 p-2 rounded text-xs">{error}</div>
-          )}
-          <div>
-            <label className="block text-sm text-text-secondary mb-1">Network</label>
-            <select
-              value={network}
-              onChange={(e) => setNetwork(e.target.value)}
-              className="w-full p-3 bg-bg-tertiary rounded-lg text-text"
+      <div className="relative z-10 mt-4 space-y-4">
+        <button
+          onClick={() => setShowForm((value) => !value)}
+          className="w-full rounded-2xl bg-bg-secondary p-4 text-left"
+        >
+          <div className="font-medium">{showForm ? t('common.cancel') : t('addresses.addAddress')}</div>
+        </button>
+
+        {showForm ? (
+          <form onSubmit={handleBind} className="rounded-2xl bg-bg-secondary p-4 space-y-3">
+            {error ? <div className="rounded-lg bg-red-500/15 p-3 text-sm text-red-300">{error}</div> : null}
+            <label className="block text-sm text-text-secondary">
+              {t('common.network')}
+              <select
+                value={network}
+                onChange={(event) => setNetwork(event.target.value)}
+                className="mt-1 w-full rounded-xl bg-bg p-3 text-text"
+              >
+                {NETWORKS.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm text-text-secondary">
+              {t('common.sourceWallet')}
+              <input
+                type="text"
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+                placeholder={t('addresses.placeholder')}
+                className="mt-1 w-full rounded-xl bg-bg p-3 text-text"
+                required
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full rounded-xl bg-primary px-4 py-3 font-medium text-primary-text disabled:opacity-60"
             >
-              {NETWORKS.map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm text-text-secondary mb-1">Your Wallet Address</label>
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="0x..."
-              className="w-full p-3 bg-bg-tertiary rounded-lg text-text text-sm"
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full p-3 bg-primary text-primary-text rounded-lg font-medium disabled:opacity-50"
-          >
-            {submitting ? 'Binding...' : 'Bind Address'}
-          </button>
-        </form>
-      )}
+              {submitting ? t('common.binding') : t('common.bind')}
+            </button>
+          </form>
+        ) : null}
 
-      {wallets.length === 0 ? (
-        <div className="text-center py-8 text-text-secondary">
-          <p className="mb-2">No addresses bound yet</p>
-          <p className="text-sm">Add your wallet address to link deposits automatically</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {wallets.map((wallet) => (
-            <div key={wallet.wallet_id} className="bg-bg-secondary rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-medium">{wallet.network}</span>
-                <button
-                  onClick={() => handleUnbind(wallet.wallet_id)}
-                  className="text-red-400 text-xs font-medium"
-                >
-                  Unbind
-                </button>
+        {wallets.length === 0 ? (
+          <div className="rounded-2xl bg-bg-secondary p-5 text-sm text-text-secondary">
+            <div className="font-medium text-text">{t('addresses.emptyTitle')}</div>
+            <p className="mt-2">{t('addresses.emptySub')}</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {wallets.map((wallet) => (
+              <div key={wallet.wallet_id} className="rounded-2xl bg-bg-secondary p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium">{wallet.network}</div>
+                    <div className="mt-1 text-xs text-text-secondary">
+                      {t('addresses.boundDate')}: {new Date(wallet.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleUnbind(wallet.wallet_id)}
+                    className="text-sm font-medium text-red-300"
+                  >
+                    {t('addresses.unbind')}
+                  </button>
+                </div>
+                <div className="mt-3 break-all font-mono text-xs text-link">{wallet.source_address}</div>
               </div>
-              <div className="font-mono text-xs text-link break-all">{wallet.source_address}</div>
-              <div className="text-text-secondary text-xs mt-1">
-                Bound: {new Date(wallet.created_at).toLocaleDateString()}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Link href="/" className="block text-center text-primary mt-6">
-        &larr; Back to Home
-      </Link>
-    </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </AppScreen>
   );
 }

@@ -1,5 +1,7 @@
-import type { Metadata } from 'next';
+﻿import type { Metadata } from 'next';
+import Script from 'next/script';
 import { AuthProvider } from '../providers/auth-provider';
+import { LanguageProvider } from '../providers/language-provider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -14,13 +16,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="beforeInteractive"
+        />
+      </head>
       <body>
-        <AuthProvider>
-          <main className="min-h-screen bg-bg text-text">
-            {children}
-          </main>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <main className="min-h-screen bg-bg text-text">
+              {children}
+            </main>
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   );
 }
+

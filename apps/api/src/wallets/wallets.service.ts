@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Address } from '@ton/core';
 import { PrismaService } from '../prisma/prisma.service';
 import { BindWalletDto, UnbindWalletDto, WalletDto } from './dto/wallet.dto';
+
+type WalletRole = 'SOURCE' | 'RETURNING' | 'BOTH';
 
 @Injectable()
 export class WalletsService {
@@ -12,11 +15,12 @@ export class WalletsService {
       orderBy: { created_at: 'desc' },
     });
 
-    return wallets.map(this.serialize);
+    return wallets.map((wallet) => this.serialize(wallet));
   }
 
   async bind(userId: string, dto: BindWalletDto): Promise<WalletDto> {
-    const normalizedAddress = dto.source_address.trim().toLowerCase();
+    const normalizedAddress = this.normalizeAddress(dto.network, dto.source_address);
+    const displayAddress = this.normalizeDisplayAddress(dto.network, dto.source_address);
 
     const existing = await this.prisma.wallet.findFirst({
       where: {
@@ -42,9 +46,11 @@ export class WalletsService {
         user_id: userId,
         network: dto.network,
         source_address: normalizedAddress,
+        display_address: displayAddress,
         payout_address: dto.payout_address || null,
+        wallet_role: 'SOURCE',
         verification_status: 'unverified',
-      },
+      } as any,
     });
 
     return this.serialize(wallet);
@@ -82,11 +88,69 @@ export class WalletsService {
     const wallet = await this.prisma.wallet.findFirst({
       where: {
         network,
-        source_address: address.toLowerCase(),
+        source_address: this.normalizeAddress(network, address),
       },
     });
 
     if (!wallet) return null;
+    return this.serialize(wallet);
+  }
+
+  async findOrCreate(
+    userId: string,
+    network: string,
+    address: string,
+    requestedRole: 'SOURCE' | 'RETURNING' = 'SOURCE',
+  ): Promise<WalletDto> {
+    const normalizedAddress = this.normalizeAddress(network, address);
+    const displayAddress = this.formatAddressForDisplay(network, normalizedAddress);
+    const requestedDisplayAddress = this.normalizeDisplayAddress(network, address);
+    const existing = await this.prisma.wallet.findFirst({
+      where: {
+        network,
+        source_address: normalizedAddress,
+      },
+    });
+
+    if (existing) {
+      if (existing.user_id !== userId) {
+        throw new ConflictException(
+          `Address ${displayAddress} is already bound to another user on ${network} network`,
+        );
+      }
+
+      const currentRole = ((existing as any).wallet_role ?? 'SOURCE') as WalletRole;
+      const nextRole = this.mergeWalletRole(currentRole, requestedRole);
+      const shouldRefreshDisplayAddress =
+        !!requestedDisplayAddress && (existing as any).display_address !== requestedDisplayAddress;
+
+      if (nextRole !== currentRole || shouldRefreshDisplayAddress) {
+        const updated = await this.prisma.wallet.update({
+          where: { wallet_id: existing.wallet_id },
+          data: {
+            wallet_role: nextRole,
+            ...(shouldRefreshDisplayAddress ? { display_address: requestedDisplayAddress } : {}),
+          } as any,
+        });
+
+        return this.serialize(updated);
+      }
+
+      return this.serialize(existing);
+    }
+
+    const wallet = await this.prisma.wallet.create({
+      data: {
+        user_id: userId,
+        network,
+        source_address: normalizedAddress,
+        display_address: requestedDisplayAddress,
+        payout_address: null,
+        wallet_role: requestedRole,
+        verification_status: 'unverified',
+      } as any,
+    });
+
     return this.serialize(wallet);
   }
 
@@ -95,13 +159,56 @@ export class WalletsService {
       wallet_id: wallet.wallet_id,
       user_id: wallet.user_id,
       network: wallet.network,
-      source_address: wallet.source_address,
+      source_address: wallet.display_address ?? this.formatAddressForDisplay(wallet.network, wallet.source_address),
       payout_address: wallet.payout_address,
+      wallet_role: wallet.wallet_role ?? 'SOURCE',
       verification_status: wallet.verification_status,
       first_seen_at: wallet.first_seen_at.toISOString(),
       last_used_at: wallet.last_used_at?.toISOString() || null,
       created_at: wallet.created_at.toISOString(),
       updated_at: wallet.updated_at.toISOString(),
     };
+  }
+
+  private mergeWalletRole(currentRole: WalletRole, requestedRole: 'SOURCE' | 'RETURNING'): WalletRole {
+    if (currentRole === 'BOTH' || currentRole === requestedRole) {
+      return currentRole;
+    }
+
+    return 'BOTH';
+  }
+
+  private normalizeAddress(network: string, address: string): string {
+    const trimmed = address.trim();
+    if (network === 'TON') {
+      try {
+        return Address.parse(trimmed).toRawString().toLowerCase();
+      } catch {
+        return trimmed;
+      }
+    }
+
+    return trimmed.toLowerCase();
+  }
+
+  private normalizeDisplayAddress(network: string, address: string): string {
+    const trimmed = address.trim();
+    if (trimmed.length === 0) {
+      return trimmed;
+    }
+
+    return network === 'TON' ? trimmed : trimmed;
+  }
+
+  private formatAddressForDisplay(network: string, address: string): string {
+    if (network === 'TON') {
+      try {
+        return Address.parse(address).toString();
+      } catch {
+        return address;
+      }
+    }
+
+    return address;
   }
 }

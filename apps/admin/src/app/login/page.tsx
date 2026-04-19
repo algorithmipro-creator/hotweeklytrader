@@ -2,14 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { adminLogin } from '../../lib/api';
+import { adminLogin, adminPasswordLogin } from '../../lib/api';
 import { getTelegramInitData, waitForTelegramInitData } from '../../lib/telegram';
+import { getAdminToken } from '../../lib/admin-session.js';
+import { shouldSkipTelegramAutoLogin } from '../../lib/login-flow.js';
 
 const ADMIN_HOME_PATH = '/';
 
 export default function LoginPage() {
   const router = useRouter();
   const [initData, setInitData] = useState('');
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -17,9 +21,8 @@ export default function LoginPage() {
     let cancelled = false;
 
     const loginFromTelegram = async () => {
-      const token = localStorage.getItem('admin_token');
-      if (token) {
-        router.push(ADMIN_HOME_PATH);
+      const token = getAdminToken(localStorage);
+      if (shouldSkipTelegramAutoLogin(token)) {
         return;
       }
 
@@ -39,7 +42,7 @@ export default function LoginPage() {
         router.push(ADMIN_HOME_PATH);
       } catch (err: any) {
         if (!cancelled) {
-          setError(err.response?.data?.message || err.message || 'Authentication failed');
+          setError(err.response?.data?.message || 'Authentication failed');
         }
       } finally {
         if (!cancelled) {
@@ -55,7 +58,22 @@ export default function LoginPage() {
     };
   }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      await adminPasswordLogin(login, password);
+      router.push(ADMIN_HOME_PATH);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTelegramSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -64,7 +82,7 @@ export default function LoginPage() {
       await adminLogin(initData);
       router.push(ADMIN_HOME_PATH);
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Authentication failed');
+      setError(err.response?.data?.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -81,12 +99,56 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handlePasswordSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-text-secondary mb-1">
+            <label htmlFor="admin-login" className="block text-sm text-text-secondary mb-1">
+              Admin Login
+            </label>
+            <input
+              id="admin-login"
+              value={login}
+              onChange={(e) => setLogin(e.target.value)}
+              className="w-full p-3 bg-bg-tertiary rounded-lg text-text text-sm"
+              placeholder="owner"
+              autoComplete="username"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="admin-password" className="block text-sm text-text-secondary mb-1">
+              Password
+            </label>
+            <input
+              id="admin-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full p-3 bg-bg-tertiary rounded-lg text-text text-sm"
+              placeholder="Enter password"
+              autoComplete="current-password"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full p-3 bg-primary text-white rounded-lg font-medium disabled:opacity-50"
+          >
+            {loading ? 'Logging in...' : 'Login with Password'}
+          </button>
+        </form>
+
+        <div className="my-5 border-t border-gray-700" />
+
+        <form onSubmit={handleTelegramSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="telegram-init-data" className="block text-sm text-text-secondary mb-1">
               Telegram InitData
             </label>
             <textarea
+              id="telegram-init-data"
               value={initData}
               onChange={(e) => setInitData(e.target.value)}
               className="w-full p-3 bg-bg-tertiary rounded-lg text-text text-sm"
@@ -99,14 +161,14 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full p-3 bg-primary text-white rounded-lg font-medium disabled:opacity-50"
+            className="w-full p-3 bg-bg-tertiary text-text rounded-lg font-medium disabled:opacity-50"
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? 'Logging in...' : 'Login with Telegram InitData'}
           </button>
         </form>
 
         <p className="text-text-secondary text-xs mt-4">
-          Open the admin panel through the Telegram admin button for automatic login, or paste Telegram WebApp initData manually.
+          Password login works in a normal browser. Telegram auto-login still works when the page is opened inside Telegram WebApp context.
         </p>
       </div>
     </div>
