@@ -5,8 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   getAdminPeriods,
-  getPeriodCompletionReadiness,
-  getPeriodTraderReports,
+  getCanonicalPeriodTraderReporting,
 } from '../../lib/api';
 import {
   buildTraderReportStatusSummary,
@@ -23,12 +22,12 @@ function formatDateRange(period: any) {
 export default function TraderReportingRegistryPage() {
   const searchParams = useSearchParams();
   const [periods, setPeriods] = useState<any[]>([]);
-  const [reports, setReports] = useState<any[]>([]);
-  const [readiness, setReadiness] = useState<any>(null);
+  const [reporting, setReporting] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [periodLoading, setPeriodLoading] = useState(false);
   const [periodStatusFilter, setPeriodStatusFilter] = useState('ALL');
   const [selectedPeriodId, setSelectedPeriodId] = useState('');
+  const [selectedTraderId, setSelectedTraderId] = useState('');
 
   const visiblePeriods = useMemo(() => {
     const reportablePeriods = filterPeriodsForTraderReporting(periods);
@@ -44,7 +43,11 @@ export default function TraderReportingRegistryPage() {
     [selectedPeriodId, visiblePeriods],
   );
 
-  const summary = useMemo(() => buildTraderReportStatusSummary(reports), [reports]);
+  const summary = useMemo(() => buildTraderReportStatusSummary(reporting?.traders || []), [reporting]);
+  const selectedTrader = useMemo(
+    () => reporting?.traders?.find((trader: any) => trader.trader_id === selectedTraderId) || null,
+    [reporting, selectedTraderId],
+  );
 
   useEffect(() => {
     getAdminPeriods()
@@ -64,24 +67,27 @@ export default function TraderReportingRegistryPage() {
 
   useEffect(() => {
     if (!selectedPeriodId) {
-      setReports([]);
-      setReadiness(null);
+      setReporting(null);
+      setSelectedTraderId('');
       return;
     }
 
     setPeriodLoading(true);
-    Promise.all([
-      getPeriodTraderReports(selectedPeriodId),
-      getPeriodCompletionReadiness(selectedPeriodId),
-    ])
-      .then(([nextReports, nextReadiness]) => {
-        setReports(nextReports);
-        setReadiness(nextReadiness);
+    getCanonicalPeriodTraderReporting(selectedPeriodId)
+      .then((nextReporting) => {
+        setReporting(nextReporting);
+        setSelectedTraderId((current: string) => {
+          if (nextReporting?.traders?.some((trader: any) => trader.trader_id === current)) {
+            return current;
+          }
+
+          return nextReporting?.traders?.[0]?.trader_id || '';
+        });
       })
       .catch((error) => {
         console.error(error);
-        setReports([]);
-        setReadiness(null);
+        setReporting(null);
+        setSelectedTraderId('');
       })
       .finally(() => setPeriodLoading(false));
   }, [selectedPeriodId]);
@@ -165,12 +171,12 @@ export default function TraderReportingRegistryPage() {
                     <p className="mt-1 text-sm text-text-secondary">{formatDateRange(selectedPeriod)}</p>
                   </div>
                   <div className="text-right">
-                    <div className={`text-sm font-medium ${readiness?.ready ? 'text-success' : 'text-warning'}`}>
-                      {readiness?.ready ? 'Ready to complete settlement' : 'Settlement still in progress'}
+                    <div className={`text-sm font-medium ${reporting?.readiness?.ready ? 'text-success' : 'text-warning'}`}>
+                      {reporting?.readiness?.ready ? 'Ready to complete settlement' : 'Settlement still in progress'}
                     </div>
-                    {!!readiness?.blockers?.length && (
+                    {!!reporting?.readiness?.blockers?.length && (
                       <div className="mt-1 text-xs text-text-secondary">
-                        {readiness.blockers.join(', ')}
+                        {reporting.readiness.blockers.join(', ')}
                       </div>
                     )}
                   </div>
@@ -204,59 +210,104 @@ export default function TraderReportingRegistryPage() {
                 </div>
               </div>
 
-              <div className="rounded-lg bg-bg-secondary overflow-hidden">
-                <div className="flex items-center justify-between border-b border-gray-700 px-4 py-3">
-                  <h3 className="font-semibold">Trader Reports</h3>
-                  <Link
-                    href={`/periods/${selectedPeriod.investment_period_id}/reporting`}
-                    className="text-sm text-primary hover:underline"
-                  >
-                    Open classic reporting view
-                  </Link>
+              <div className="grid gap-6 xl:grid-cols-[320px,1fr]">
+                <div className="rounded-lg bg-bg-secondary overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-gray-700 px-4 py-3">
+                    <h3 className="font-semibold">Traders</h3>
+                    <Link
+                      href={`/periods/${selectedPeriod.investment_period_id}/reporting`}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      Open classic reporting view
+                    </Link>
+                  </div>
+
+                  {periodLoading ? (
+                    <div className="p-6 text-sm text-text-secondary">Loading trader reporting...</div>
+                  ) : !reporting?.traders?.length ? (
+                    <div className="p-6 text-sm text-text-secondary">
+                      No traders with reportable cycles were found for this period.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-700">
+                      {reporting.traders.map((trader: any) => (
+                        <button
+                          key={trader.trader_id}
+                          type="button"
+                          onClick={() => setSelectedTraderId(trader.trader_id)}
+                          className={`w-full px-4 py-4 text-left transition ${
+                            trader.trader_id === selectedTraderId ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary/60'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="font-medium">{trader.trader_display_name || trader.trader_nickname}</div>
+                              <div className="mt-1 text-xs text-text-secondary">@{trader.trader_slug}</div>
+                            </div>
+                            <StatusBadge status={trader.report_status} />
+                          </div>
+                          <div className="mt-3 flex items-center gap-3 text-xs text-text-secondary">
+                            <span>{trader.totals.deposits_count} cycles</span>
+                            <span>{trader.totals.confirmed_amount_usdt ?? 0} USDT</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                {periodLoading ? (
-                  <div className="p-6 text-sm text-text-secondary">Loading trader reports...</div>
-                ) : reports.length === 0 ? (
-                  <div className="p-6 text-sm text-text-secondary">
-                    No trader reports yet for this period.
+                <div className="rounded-lg bg-bg-secondary overflow-hidden">
+                  <div className="border-b border-gray-700 px-4 py-3">
+                    <h3 className="font-semibold">
+                      {selectedTrader ? `Cycles for ${selectedTrader.trader_display_name || selectedTrader.trader_nickname}` : 'Cycles'}
+                    </h3>
                   </div>
-                ) : (
-                  <table className="w-full text-sm">
-                    <thead className="bg-bg-tertiary text-text-secondary">
-                      <tr>
-                        <th className="p-3 text-left">Trader</th>
-                        <th className="p-3 text-left">Status</th>
-                        <th className="p-3 text-left">Saved Balance</th>
-                        <th className="p-3 text-left">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reports.map((report: any) => (
-                        <tr key={report.trader_id} className="border-t border-gray-700">
-                          <td className="p-3">
-                            <div className="font-medium">{report.trader_display_name || report.trader_nickname}</div>
-                            <div className="mt-1 text-xs text-text-secondary">@{report.trader_slug}</div>
-                          </td>
-                          <td className="p-3">
-                            <StatusBadge status={report.status} />
-                          </td>
-                          <td className="p-3 text-text-secondary">
-                            {report.ending_balance_usdt ?? '-'}
-                          </td>
-                          <td className="p-3">
-                            <Link
-                              href={`/periods/${selectedPeriod.investment_period_id}/reporting?traderId=${report.trader_id}`}
-                              className="text-primary hover:underline"
-                            >
-                              Open report
-                            </Link>
-                          </td>
+
+                  {periodLoading ? (
+                    <div className="p-6 text-sm text-text-secondary">Loading trader cycles...</div>
+                  ) : !selectedTrader ? (
+                    <div className="p-6 text-sm text-text-secondary">
+                      Select a trader to inspect user cycles included in this reporting period.
+                    </div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="bg-bg-tertiary text-text-secondary">
+                        <tr>
+                          <th className="p-3 text-left">User</th>
+                          <th className="p-3 text-left">Status</th>
+                          <th className="p-3 text-left">Amount</th>
+                          <th className="p-3 text-left">Settlement</th>
+                          <th className="p-3 text-left">Routing</th>
+                          <th className="p-3 text-left">Referral</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                      </thead>
+                      <tbody>
+                        {selectedTrader?.deposits?.map((deposit: any) => (
+                          <tr key={deposit.deposit_id} className="border-t border-gray-700">
+                            <td className="p-3">
+                              <div className="font-medium">{deposit.user_display_name || deposit.username || deposit.user_id}</div>
+                              <div className="mt-1 text-xs text-text-secondary">{deposit.network} / {deposit.asset_symbol}</div>
+                            </td>
+                            <td className="p-3 text-text-secondary">{deposit.status}</td>
+                            <td className="p-3 text-text-secondary">{deposit.confirmed_amount ?? '-'} USDT</td>
+                            <td className="p-3 text-text-secondary">{deposit.settlement_preference || '-'}</td>
+                            <td className="p-3 text-text-secondary">{deposit.return_address_display || deposit.source_address_display || '-'}</td>
+                            <td className="p-3 text-text-secondary">
+                              {deposit.referral ? (
+                                <span>
+                                  {deposit.referral.reward_amount_usdt ?? 0} USDT
+                                  {deposit.referral.source === 'TEAM_DERIVED' ? ' · Team derived' : ''}
+                                </span>
+                              ) : (
+                                'No referral payout'
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               </div>
             </>
           ) : (

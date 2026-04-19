@@ -6,13 +6,14 @@ export function filterPeriodsForTraderReporting(periods) {
 
 export function buildTraderReportStatusSummary(reports) {
   return (reports || []).reduce((summary, report) => {
+    const status = report.report_status || report.status || 'MISSING';
     summary.total += 1;
 
-    if (report.status === 'MISSING') summary.missing += 1;
-    if (report.status === 'DRAFT' || report.status === 'REVISED') summary.draft += 1;
-    if (report.status === 'PENDING_APPROVAL') summary.pendingApproval += 1;
-    if (report.status === 'APPROVED') summary.approved += 1;
-    if (report.status === 'PUBLISHED') summary.published += 1;
+    if (status === 'MISSING') summary.missing += 1;
+    if (status === 'DRAFT' || status === 'REVISED') summary.draft += 1;
+    if (status === 'PENDING_APPROVAL') summary.pendingApproval += 1;
+    if (status === 'APPROVED') summary.approved += 1;
+    if (status === 'PUBLISHED') summary.published += 1;
 
     return summary;
   }, {

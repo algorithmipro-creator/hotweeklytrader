@@ -67,6 +67,8 @@ describe('PeriodsService', () => {
     mockReferralRewardsService.previewRewardsForPublishedTraderReport.mockResolvedValue([]);
     mockPrisma.profitLossReport.findMany.mockReset();
     mockPrisma.profitLossReport.findMany.mockResolvedValue([]);
+    mockPrisma.payoutRegistry.findMany.mockReset();
+    mockPrisma.payoutRegistry.findMany.mockResolvedValue([]);
     mockPrisma.referralReward.findMany.mockReset();
     mockPrisma.referralReward.findMany.mockResolvedValue([]);
     mockPrisma.traderPeriodLiveMetrics.findUnique.mockReset();
@@ -951,6 +953,97 @@ describe('PeriodsService', () => {
         address_source: 'RETURN_ADDRESS',
         referral_reward_total_usdt: 2.4,
       });
+    });
+  });
+
+  describe('getCanonicalPeriodReporting', () => {
+    it('returns a canonical period -> trader -> deposits payload shape', async () => {
+      mockPrisma.investmentPeriod.findUnique.mockResolvedValue({
+        investment_period_id: 'period-1',
+        title: 'Week 1',
+        period_type: 'WEEKLY',
+        start_date: new Date('2026-04-01T00:00:00.000Z'),
+        end_date: new Date('2026-04-07T00:00:00.000Z'),
+        lock_date: null,
+        status: 'LOCKED',
+        accepted_networks: ['TRON'],
+        accepted_assets: ['USDT'],
+        minimum_amount_rules: null,
+        maximum_amount_rules: null,
+        created_at: new Date('2026-03-25T00:00:00.000Z'),
+        updated_at: new Date('2026-04-07T00:00:00.000Z'),
+      });
+      mockPrisma.deposit.findMany.mockResolvedValue([
+        {
+          deposit_id: 'dep-1',
+          investment_period_id: 'period-1',
+          trader_id: 'trader-1',
+          user_id: 'user-1',
+          network: 'TRON',
+          asset_symbol: 'USDT',
+          status: 'REPORT_READY',
+          confirmed_amount: '100',
+          settlement_preference: 'WITHDRAW_ALL',
+          source_address_display: 'TSource',
+          return_address_display: 'TReturn',
+          trader: {
+            trader_id: 'trader-1',
+            nickname: 'alpha',
+            slug: 'alpha',
+            display_name: 'Alpha',
+          },
+          user: {
+            user_id: 'user-1',
+            username: 'alice',
+            display_name: 'Alice',
+          },
+        },
+      ]);
+      mockPrisma.periodTraderReport.findMany.mockResolvedValue([
+        {
+          trader_report_id: 'report-1',
+          investment_period_id: 'period-1',
+          trader_id: 'trader-1',
+          status: 'DRAFT',
+          ending_balance_usdt: '1200',
+          trader_fee_percent: '40',
+          network_fees_json: { TRON: 2.5 },
+          generated_by: 'admin-1',
+          approved_by: null,
+          approved_at: null,
+          published_at: null,
+          created_at: new Date('2026-04-07T10:00:00.000Z'),
+          updated_at: new Date('2026-04-07T10:10:00.000Z'),
+          trader: {
+            trader_id: 'trader-1',
+            nickname: 'alpha',
+            slug: 'alpha',
+            display_name: 'Alpha',
+          },
+        },
+      ]);
+
+      const result = await (service as any).getCanonicalPeriodReporting('period-1');
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          period: expect.any(Object),
+          readiness: expect.any(Object),
+          traders: expect.arrayContaining([
+            expect.objectContaining({
+              trader_id: 'trader-1',
+              deposits: expect.any(Array),
+            }),
+          ]),
+        }),
+      );
+      expect(result.traders[0].deposits[0]).toEqual(
+        expect.objectContaining({
+          deposit_id: 'dep-1',
+          user_id: 'user-1',
+          referral: null,
+        }),
+      );
     });
   });
 

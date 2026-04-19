@@ -108,6 +108,11 @@ export async function getPeriodTraderReports(id: string) {
   return response.data;
 }
 
+export async function getCanonicalPeriodTraderReporting(periodId: string) {
+  const response = await api.get(`/admin/periods/${periodId}/trader-reporting`);
+  return response.data;
+}
+
 export async function getTraderReportBuilder(periodId: string, traderId: string) {
   const response = await api.get(`/admin/periods/${periodId}/trader-reports/${traderId}/builder`);
   return response.data;

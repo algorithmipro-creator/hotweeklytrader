@@ -228,6 +228,58 @@ export class PeriodCompletionReadinessDto {
   blockers: string[];
 }
 
+export class PeriodReportingReadinessDto extends PeriodCompletionReadinessDto {
+  reportable_trader_count: number;
+  missing_report_count: number;
+}
+
+export class DepositReportingReferralDto {
+  reward_amount_usdt: number | null;
+  source: 'TEAM_DERIVED';
+}
+
+export class DepositReportingNodeDto {
+  deposit_id: string;
+  user_id: string;
+  username: string | null;
+  user_display_name: string | null;
+  network: string;
+  asset_symbol: string;
+  status: string;
+  confirmed_amount: number | null;
+  settlement_preference: string | null;
+  source_address_display: string | null;
+  return_address_display: string | null;
+  referral: DepositReportingReferralDto | null;
+}
+
+export class TraderReportingSavedReportDto {
+  trader_report_id: string | null;
+  ending_balance_usdt: number | null;
+  trader_fee_percent: number | null;
+  network_fees_json: Record<string, number> | null;
+}
+
+export class TraderReportingNodeDto {
+  trader_id: string;
+  trader_slug: string | null;
+  trader_nickname: string | null;
+  trader_display_name: string | null;
+  report_status: string;
+  saved_report: TraderReportingSavedReportDto | null;
+  totals: {
+    deposits_count: number;
+    confirmed_amount_usdt: number | null;
+  };
+  deposits: DepositReportingNodeDto[];
+}
+
+export class PeriodReportingPayloadDto {
+  period: PeriodDto;
+  readiness: PeriodReportingReadinessDto;
+  traders: TraderReportingNodeDto[];
+}
+
 export class UpdatePayoutRegistryRowDto {
   @IsOptional()
   @IsIn(['PENDING', 'PAID_MANUAL', 'PAID_BATCH', 'FAILED', 'SKIPPED'])

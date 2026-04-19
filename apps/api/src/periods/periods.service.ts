@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   BulkPayoutRegistryUpdateDto,
   CreatePeriodDto,
+  PeriodReportingPayloadDto,
   PayoutRegistryDto,
   PeriodTraderReportDto,
   PeriodCompletionReadinessDto,
@@ -245,6 +246,131 @@ export class PeriodsService {
         updated_at: existingReport?.updated_at?.toISOString() ?? null,
       };
     });
+  }
+
+  async getCanonicalPeriodReporting(periodId: string): Promise<PeriodReportingPayloadDto> {
+    const period = await this.prisma.investmentPeriod.findUnique({
+      where: { investment_period_id: periodId },
+    });
+    if (!period) {
+      throw new NotFoundException('Investment period not found');
+    }
+    const readiness = await this.getPeriodCompletionReadiness(periodId);
+    const reports = await this.listTraderReports(periodId);
+
+    const deposits = await this.prisma.deposit.findMany({
+      where: {
+        investment_period_id: periodId,
+        trader_id: { not: null },
+        status: { in: this.settlementEligibleDepositStatuses as any },
+      },
+      select: {
+        deposit_id: true,
+        user_id: true,
+        trader_id: true,
+        network: true,
+        asset_symbol: true,
+        status: true,
+        confirmed_amount: true,
+        settlement_preference: true,
+        source_address_display: true,
+        return_address_display: true,
+        trader: {
+          select: {
+            trader_id: true,
+            nickname: true,
+            slug: true,
+            display_name: true,
+          },
+        },
+        user: {
+          select: {
+            user_id: true,
+            username: true,
+            display_name: true,
+          },
+        },
+      },
+      orderBy: { created_at: 'asc' },
+    } as any);
+
+    const referralTotals = await this.getReferralRewardTotals(periodId, deposits.map((deposit) => deposit.deposit_id));
+    const reportByTraderId = new Map(reports.map((report) => [report.trader_id, report]));
+    const depositsByTraderId = new Map<string, any[]>();
+
+    for (const deposit of deposits) {
+      const traderId = deposit.trader_id;
+      if (!traderId) {
+        continue;
+      }
+      const traderDeposits = depositsByTraderId.get(traderId) ?? [];
+      traderDeposits.push(deposit);
+      depositsByTraderId.set(traderId, traderDeposits);
+    }
+
+    const traders = [...depositsByTraderId.entries()].map(([traderId, traderDeposits]) => {
+      const report = reportByTraderId.get(traderId) ?? null;
+      const trader = traderDeposits[0]?.trader;
+      const normalizedDeposits = traderDeposits.map((deposit) => {
+        const referral = referralTotals.get(deposit.deposit_id);
+
+        return {
+          deposit_id: deposit.deposit_id,
+          user_id: deposit.user_id,
+          username: deposit.user?.username ?? null,
+          user_display_name: deposit.user?.display_name ?? null,
+          network: deposit.network,
+          asset_symbol: deposit.asset_symbol,
+          status: deposit.status,
+          confirmed_amount: this.parseOptionalDecimal(deposit.confirmed_amount),
+          settlement_preference: deposit.settlement_preference ?? null,
+          source_address_display: deposit.source_address_display ?? null,
+          return_address_display: deposit.return_address_display ?? null,
+          referral: referral
+            ? {
+              reward_amount_usdt: this.round2(referral.total),
+              source: 'TEAM_DERIVED' as const,
+            }
+            : null,
+        };
+      });
+
+      const confirmedAmountUsdt = normalizedDeposits.reduce((sum, deposit) => sum + (deposit.confirmed_amount ?? 0), 0);
+
+      return {
+        trader_id: traderId,
+        trader_slug: trader?.slug ?? null,
+        trader_nickname: trader?.nickname ?? null,
+        trader_display_name: trader?.display_name ?? null,
+        report_status: report?.status ?? 'MISSING',
+        saved_report: report
+          ? {
+            trader_report_id: report.trader_report_id,
+            ending_balance_usdt: report.ending_balance_usdt ?? null,
+            trader_fee_percent: report.trader_fee_percent ?? null,
+            network_fees_json: report.network_fees_json ?? null,
+          }
+          : null,
+        totals: {
+          deposits_count: normalizedDeposits.length,
+          confirmed_amount_usdt: this.round2(confirmedAmountUsdt),
+        },
+        deposits: normalizedDeposits,
+      };
+    });
+
+    const missingReportCount = traders.filter((trader) => trader.report_status === 'MISSING').length;
+
+    return {
+      period: this.serialize(period),
+      readiness: {
+        ready: readiness.ready,
+        blockers: readiness.blockers,
+        reportable_trader_count: traders.length,
+        missing_report_count: missingReportCount,
+      },
+      traders,
+    };
   }
 
   async upsertTraderReportDraft(

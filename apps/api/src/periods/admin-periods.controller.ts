@@ -11,6 +11,7 @@ import {
   PayoutRegistryDto,
   PeriodDto,
   PeriodCompletionReadinessDto,
+  PeriodReportingPayloadDto,
   PeriodTraderReportDto,
   PeriodTraderReportPreviewDto,
   PeriodTraderReportSummaryDto,
@@ -47,6 +48,11 @@ export class AdminPeriodsController {
   @Get(':id/trader-reports')
   async listTraderReports(@Param('id') id: string): Promise<PeriodTraderReportSummaryDto[]> {
     return this.periodsService.listTraderReports(id);
+  }
+
+  @Get(':id/trader-reporting')
+  async getCanonicalTraderReporting(@Param('id') id: string): Promise<PeriodReportingPayloadDto> {
+    return this.periodsService.getCanonicalPeriodReporting(id);
   }
 
   @Get(':id/trader-reports/:traderId/builder')
